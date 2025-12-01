@@ -1,3 +1,4 @@
+// frontend/src/App.tsx
 import React, { useState, useRef, useEffect } from 'react';
 import { Heart, Sparkles, Bot, Smile, Wind, History as HistoryIcon } from 'lucide-react';
 import type { Message, MoodEntry } from './types';
@@ -6,17 +7,22 @@ import Mood from './components/Mood';
 import History from './components/History';
 import Login from './pages/Login';
 import Register from './pages/Register';
+// 👇 Import Landing page
+import Landing from './pages/Landing';
 
 function App() {
-  // Error state for mood check-in
-  const [moodCheckError, setMoodCheckError] = useState<string>('');
-  // ...existing state declarations...
-
-  // Authentication state (mock)
+  // ✅ Move it here, right after other useState calls
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => !!localStorage.getItem('calmi_auth'));
   const [showRegisterPage, setShowRegisterPage] = useState<boolean>(false);
+  const [showLoginPage, setShowLoginPage] = useState<boolean>(false); // ✅ FIXED
+  const [isGuest, setIsGuest] = useState<boolean>(() => localStorage.getItem('calmi_guest') === 'true');
+
   // Session ID for current chat
-  const [sessionId, setSessionId] = useState<string>(() => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
+  const [sessionId, setSessionId] = useState<string>(() => {
+    // If guest, persist session ID across refresh (optional enhancement)
+    return localStorage.getItem('calmi_session') || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  });
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -28,10 +34,23 @@ function App() {
   const [showMoodCheckin, setShowMoodCheckin] = useState<boolean>(false);
   const [selectedRecord, setSelectedRecord] = useState<MoodEntry | null>(null);
   const [showRecordDetail, setShowRecordDetail] = useState<boolean>(false);
+  const [moodCheckError, setMoodCheckError] = useState<string>('');
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Helper to check if mood check-in is allowed for current session
   const canCheckInMood = !moodHistory.some((entry) => entry.sessionId === sessionId);
+
+  // 👇 Persist session ID and guest status in localStorage when needed
+  useEffect(() => {
+    if (isGuest) {
+      localStorage.setItem('calmi_guest', 'true');
+      localStorage.setItem('calmi_session', sessionId);
+    } else {
+      localStorage.removeItem('calmi_guest');
+      localStorage.removeItem('calmi_session');
+    }
+  }, [isGuest, sessionId]);
 
   // Helper to retrieve chat for a session
   const retrieveChatForSession = (session: string) => {
@@ -40,7 +59,6 @@ function App() {
     setActiveFeature('chat');
     setShowRecordDetail(false);
   };
-
   const moodOptions = [
     { emoji: '😊', label: 'Happy', value: 'happy', color: 'from-yellow-100 to-orange-100' },
     { emoji: '😢', label: 'Sad', value: 'sad', color: 'from-blue-100 to-indigo-100' },
@@ -98,7 +116,6 @@ function App() {
   const submitMoodCheckIn = async (): Promise<void> => {
     if (!currentMood) return;
 
-    // Prevent multiple mood check-ins per session
     if (moodHistory.some((entry) => entry.sessionId === sessionId)) {
       setMoodCheckError('One Mood Check In per chat');
       setShowMoodCheckin(false);
@@ -132,9 +149,10 @@ function App() {
     setMoodIntensity(5);
     setActiveFeature('chat');
   };
-  // Start a new chat session
+
   const startNewChat = () => {
-    setSessionId(`${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
+    const newSessionId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    setSessionId(newSessionId);
     setMessages([]);
     setCurrentMood('');
     setMoodNote('');
@@ -142,6 +160,10 @@ function App() {
     setShowMoodCheckin(false);
     setMoodCheckError('');
     setActiveFeature('chat');
+
+    if (isGuest) {
+      localStorage.setItem('calmi_session', newSessionId);
+    }
   };
 
   const getMotivationalTip = (): void => {
@@ -173,87 +195,131 @@ function App() {
 
   const getMoodSentiment = (mood: string): 'positive' | 'neutral' | 'negative' => {
     switch (mood) {
-      case 'happy':
-        return 'positive';
-      case 'sad':
-      case 'anxious':
-      case 'stressed':
-        return 'negative';
-      case 'tired':
-      case 'neutral':
-        return 'neutral';
-      default:
-        return 'neutral';
+      case 'happy': return 'positive';
+      case 'sad': case 'anxious': case 'stressed': return 'negative';
+      case 'tired': case 'neutral': return 'neutral';
+      default: return 'neutral';
     }
   };
 
   const detectUserSentiment = (message: string): 'positive' | 'neutral' | 'negative' => {
     const lowerMessage = message.toLowerCase();
-    
-    // Negative keywords
     const negativeKeywords = ['sad', 'depressed', 'anxious', 'stressed', 'worried', 'angry', 'frustrated', 'lonely', 'hurt', 'pain', 'bad', 'terrible', 'awful', 'hate', 'scared', 'fear'];
-    if (negativeKeywords.some(word => lowerMessage.includes(word))) {
-      return 'negative';
-    }
+    if (negativeKeywords.some(word => lowerMessage.includes(word))) return 'negative';
     
-    // Positive keywords
     const positiveKeywords = ['happy', 'good', 'great', 'amazing', 'wonderful', 'love', 'excited', 'grateful', 'blessed', 'awesome', 'fantastic'];
-    if (positiveKeywords.some(word => lowerMessage.includes(word))) {
-      return 'positive';
-    }
+    if (positiveKeywords.some(word => lowerMessage.includes(word))) return 'positive';
     
     return 'neutral';
   };
 
   const getBotResponse = (sentiment: 'positive' | 'neutral' | 'negative'): string => {
-    const positiveResponses = [
-      "That's wonderful to hear! I'm so glad you're feeling this way. Keep spreading that positive energy! 🌟",
-      "It sounds like things are going well for you. I'm here to support you and celebrate these moments with you! 💫",
-      "Your positive energy is contagious! Thank you for sharing this happiness with me. 🎉",
-      "That's amazing! I love hearing about the good things in your life. What else is making you happy?",
-    ];
-    const negativeResponses = [
-      "I hear you, and I can sense what you're going through. You're not alone in this—I'm here to support you. 💙",
-      "Thank you for trusting me with how you're feeling. It takes courage to share. Remember, these feelings are temporary, and I'm here for you.",
-      "I'm sorry you're struggling right now. Your feelings are valid, and it's okay to feel this way. Let's work through this together. 🤝",
-      "That sounds really tough. I want you to know that I care about how you're feeling. Take a moment for yourself—you deserve it.",
-    ];
-    const neutralResponses = [
-      "I hear you, and I'm here to support you. Thank you for sharing. Would you like to talk more about what's on your mind?",
-      "I appreciate you sharing that with me. I'm here to listen and support you whenever you need. What else is on your mind?",
-      "Thank you for opening up. I'm here to help and understand what you're going through. Feel free to share more whenever you're ready.",
-      "I'm listening, and I care about what you're saying. Let's explore this together. What would help you feel better right now?",
-    ];
     const responses = {
-      positive: positiveResponses,
-      negative: negativeResponses,
-      neutral: neutralResponses,
+      positive: [
+        "That's wonderful to hear! I'm so glad you're feeling this way. Keep spreading that positive energy! 🌟",
+        "It sounds like things are going well for you. I'm here to support you and celebrate these moments with you! 💫",
+        "Your positive energy is contagious! Thank you for sharing this happiness with me. 🎉",
+        "That's amazing! I love hearing about the good things in your life. What else is making you happy?",
+      ],
+      negative: [
+        "I hear you, and I can sense what you're going through. You're not alone in this—I'm here to support you. 💙",
+        "Thank you for trusting me with how you're feeling. It takes courage to share. Remember, these feelings are temporary, and I'm here for you.",
+        "I'm sorry you're struggling right now. Your feelings are valid, and it's okay to feel this way. Let's work through this together. 🤝",
+        "That sounds really tough. I want you to know that I care about how you're feeling. Take a moment for yourself—you deserve it.",
+      ],
+      neutral: [
+        "I hear you, and I'm here to support you. Thank you for sharing. Would you like to talk more about what's on your mind?",
+        "I appreciate you sharing that with me. I'm here to listen and support you whenever you need. What else is on your mind?",
+        "Thank you for opening up. I'm here to help and understand what you're going through. Feel free to share more whenever you're ready.",
+        "I'm listening, and I care about what you're saying. Let's explore this together. What would help you feel better right now?",
+      ],
     };
     return responses[sentiment][Math.floor(Math.random() * responses[sentiment].length)];
   };
-  // ...existing code...
-  if (!isAuthenticated) {
-    return showRegisterPage ? (
-      <Register
-        onRegister={(email) => {
-          localStorage.setItem('calmi_auth', email);
-          setIsAuthenticated(true);
-        }}
-        onShowLogin={() => setShowRegisterPage(false)}
-      />
-    ) : (
+
+  // ✅ LOGIN HANDLERS FOR LANDING PAGE
+  const handleLoginAsGuest = () => {
+    setIsAuthenticated(true);
+    setIsGuest(true);
+    // Optional: auto-start with welcome message
+    setTimeout(() => {
+      const welcomeMsg: Message = {
+        id: Date.now(),
+        text: "Hi there! I'm Calmi, your AI mental wellness companion 🌸\nHow are you feeling today?",
+        sender: 'bot',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        sessionId,
+      };
+      setMessages([welcomeMsg]);
+    }, 300);
+  };
+
+  const handleNavigateToLogin = () => {
+    setShowRegisterPage(false);
+    setShowLoginPage(true); 
+  };
+
+  const handleNavigateToRegister = () => {
+    setShowRegisterPage(true);
+  };
+
+  // 1. Show Login if explicitly requested
+  if (!isAuthenticated && showLoginPage) {
+    return (
       <Login
         onLogin={(email) => {
           localStorage.setItem('calmi_auth', email);
           setIsAuthenticated(true);
+          setIsGuest(false);
+          setShowLoginPage(false);
         }}
-        onShowRegister={() => setShowRegisterPage(true)}
+        onShowRegister={() => {
+          setShowLoginPage(false);
+          setShowRegisterPage(true);
+        }}
+        onBackToLanding={() => {
+          setShowLoginPage(false);
+          setShowRegisterPage(false);
+          // isAuthenticated remains false → will render Landing
+        }}
       />
     );
   }
 
+  // 2. Show Register if requested
+  if (!isAuthenticated && showRegisterPage) {
+    return (
+      <Register
+        onRegister={(email) => {
+          localStorage.setItem('calmi_auth', email);
+          setIsAuthenticated(true);
+          setIsGuest(false);
+          setShowRegisterPage(false);
+        }}
+        onShowLogin={() => {
+          setShowRegisterPage(false);
+          setShowLoginPage(true);
+        }}
+      />
+    );
+  }
+
+
+  // 3. Show Landing as default for unauthenticated users
+  if (!isAuthenticated) {
+    return (
+      <Landing
+        onLoginAsGuest={handleLoginAsGuest}
+        onNavigateToRegister={() => setShowRegisterPage(true)}
+        onNavigateToLogin={() => setShowLoginPage(true)} // 👈 now sets showLoginPage=true
+      />
+    );
+  }
+
+  // Main app when authenticated (including guest)
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Background blobs */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-20 left-20 w-72 h-72 bg-blue-200 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob"></div>
         <div className="absolute top-40 right-20 w-72 h-72 bg-purple-200 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-2000"></div>
@@ -261,13 +327,14 @@ function App() {
       </div>
 
       <div className="w-full max-w-6xl h-[85vh] bg-white/80 backdrop-blur-xl rounded-3xl shadow-2xl flex relative z-10 border border-white/50">
+        {/* Sidebar */}
         <div className="w-80 bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-l-3xl p-6 flex flex-col text-white shadow-xl">
           <div className="flex items-center space-x-3 mb-10">
             <div className="bg-white/20 backdrop-blur-lg p-3 rounded-2xl shadow-lg">
               <Heart className="w-7 h-7 text-white" fill="currentColor" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">Calmi</h1>
+              <h1 className="text-2xl font-bold tracking-tight">{isGuest ? 'Calmi (Guest)' : 'Calmi'}</h1>
               <p className="text-white/80 text-sm font-medium">Your Wellness Companion</p>
             </div>
           </div>
@@ -311,28 +378,30 @@ function App() {
             >
               New Chat
             </button>
-      {/* Mood check-in error modal */}
-      {moodCheckError && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-gray-100 animate-scale-in text-center">
-            <h3 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-4">
-              {moodCheckError}
-            </h3>
-            <button
-              onClick={startNewChat}
-              className="w-full bg-gradient-to-r from-indigo-500 to-purple-500 text-white py-3 rounded-2xl font-semibold hover:shadow-lg transition-all duration-300 hover:scale-105"
-            >
-              New Chat
-            </button>
-            <button
-              onClick={() => setMoodCheckError('')}
-              className="w-full mt-3 bg-gray-100 text-indigo-600 py-3 rounded-2xl font-semibold hover:bg-gray-200 transition-all duration-300"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
+
+            {/* Mood check-in error modal */}
+            {moodCheckError && (
+              <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+                <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-gray-100 animate-scale-in text-center">
+                  <h3 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-4">
+                    {moodCheckError}
+                  </h3>
+                  <button
+                    onClick={startNewChat}
+                    className="w-full bg-gradient-to-r from-indigo-500 to-purple-500 text-white py-3 rounded-2xl font-semibold hover:shadow-lg transition-all duration-300 hover:scale-105"
+                  >
+                    New Chat
+                  </button>
+                  <button
+                    onClick={() => setMoodCheckError('')}
+                    className="w-full mt-3 bg-gray-100 text-indigo-600 py-3 rounded-2xl font-semibold hover:bg-gray-200 transition-all duration-300"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            )}
+
             <button
               onClick={getMotivationalTip}
               className="w-full bg-white/20 backdrop-blur-lg text-white py-4 rounded-2xl font-semibold hover:bg-white/30 transition-all duration-300 flex items-center justify-center space-x-2 shadow-lg hover:scale-105"
@@ -350,20 +419,23 @@ function App() {
               <Wind className="w-5 h-5" />
               <span>Quick Check-in</span>
             </button>
-            
+
             <button
               onClick={() => {
-                // logout
                 localStorage.removeItem('calmi_auth');
+                localStorage.removeItem('calmi_guest');
+                localStorage.removeItem('calmi_session');
                 setIsAuthenticated(false);
+                setIsGuest(false);
               }}
               className="w-full mt-4 bg-white/10 text-white py-3 rounded-2xl font-semibold hover:bg-white/20 transition-all duration-300"
             >
-              Logout
+              {isGuest ? 'Exit Guest Mode' : 'Logout'}
             </button>
           </div>
         </div>
 
+        {/* Main content */}
         <div className="flex-1 flex flex-col bg-white/50 backdrop-blur-sm rounded-r-3xl">
           {activeFeature === 'chat' && (
             <Chat
