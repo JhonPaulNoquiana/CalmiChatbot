@@ -254,15 +254,6 @@ function App() {
     }, 300);
   };
 
-  const handleNavigateToLogin = () => {
-    setShowRegisterPage(false);
-    setShowLoginPage(true); 
-  };
-
-  const handleNavigateToRegister = () => {
-    setShowRegisterPage(true);
-  };
-
   // 1. Show Login if explicitly requested
   if (!isAuthenticated && showLoginPage) {
     return (
