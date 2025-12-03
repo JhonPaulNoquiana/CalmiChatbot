@@ -9,13 +9,30 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 // 👇 Import Landing page
 import Landing from './pages/Landing';
+// 👇 Import API service
+import { sendChatMessage } from './services/apiService';
 
 function App() {
   // ✅ Move it here, right after other useState calls
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => !!localStorage.getItem('calmi_auth'));
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => !!localStorage.getItem('calmi_token'));
   const [showRegisterPage, setShowRegisterPage] = useState<boolean>(false);
   const [showLoginPage, setShowLoginPage] = useState<boolean>(false); // ✅ FIXED
   const [isGuest, setIsGuest] = useState<boolean>(() => localStorage.getItem('calmi_guest') === 'true');
+  const [userId, setUserId] = useState<number | null>(() => {
+    const user = localStorage.getItem('calmi_user');
+    return user ? JSON.parse(user).id : null;
+  });
+  const [userName, setUserName] = useState<string>(() => {
+    const user = localStorage.getItem('calmi_user');
+    return user ? JSON.parse(user).full_name || '' : '';
+  });
+
+  // ✨ Track daily inspiration clicks (limit to 5 per session)
+  const [inspirationClicks, setInspirationClicks] = useState<number>(0);
+
+  // ✨ Track if login came from history (to restore chat) or normal login (new chat)
+  const [loginFromHistory, setLoginFromHistory] = useState<boolean>(false);
+
 
   // Session ID for current chat
   const [sessionId, setSessionId] = useState<string>(() => {
@@ -59,6 +76,15 @@ function App() {
     setActiveFeature('chat');
     setShowRecordDetail(false);
   };
+
+  // ✅ Handle opening a previous chat from history
+  const handleOpenPreviousChat = (previousMessages: Message[]) => {
+    // Use the session ID from the first message if available
+    const sessionId = previousMessages.length > 0 ? previousMessages[0].sessionId : `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    setSessionId(sessionId);
+    setMessages(previousMessages);
+    setActiveFeature('chat');
+  };
   const moodOptions = [
     { emoji: '😊', label: 'Happy', value: 'happy', color: 'from-yellow-100 to-orange-100' },
     { emoji: '😢', label: 'Sad', value: 'sad', color: 'from-blue-100 to-indigo-100' },
@@ -76,7 +102,25 @@ function App() {
     scrollToBottom();
   }, [messages]);
 
-  const sendMessage = (): void => {
+  // ✨ Personalized greeting based on authentication and userName
+  useEffect(() => {
+    if (isAuthenticated && messages.length === 0) {
+      setTimeout(() => {
+        const welcomeMsg: Message = {
+          id: Date.now(),
+          text: isGuest 
+            ? "Hi there! I'm Calmi, your AI mental wellness companion 🌸\nHow are you feeling today?"
+            : `Welcome ${userName}! 💙\n\nI'm Calmi, your empathetic AI companion created to support you through stress, anxiety, and emotional challenges. How are you feeling today?`,
+          sender: 'bot',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          sessionId,
+        };
+        setMessages([welcomeMsg]);
+      }, 300);
+    }
+  }, [isAuthenticated, userName, sessionId]);
+
+  const sendMessage = async (): Promise<void> => {
     if (!inputMessage.trim()) return;
 
     const userMessage: Message = {
@@ -91,7 +135,27 @@ function App() {
     setInputMessage('');
     setIsLoading(true);
 
-    setTimeout(() => {
+    try {
+      // Call backend API to get Gemini response
+      console.log('🚀 Attempting to call backend API...');
+      const response = await sendChatMessage(sessionId, inputMessage);
+      
+      console.log('✅ API call successful, response:', response);
+      
+      const botMessage: Message = {
+        id: Date.now() + 1,
+        text: response.message || 'I understand. Tell me more about how you\'re feeling.',
+        sender: 'bot',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        sentiment: response.sentiment || 'neutral',
+        sessionId,
+      };
+      
+      setMessages((prev) => [...prev, botMessage]);
+    } catch (error) {
+      console.error('❌ API call failed, using fallback response. Error:', error);
+      
+      // Fallback response if API fails
       const userSentiment = detectUserSentiment(inputMessage);
       const botMessage: Message = {
         id: Date.now() + 1,
@@ -101,9 +165,11 @@ function App() {
         sentiment: userSentiment,
         sessionId,
       };
+      
       setMessages((prev) => [...prev, botMessage]);
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>): void => {
@@ -159,6 +225,7 @@ function App() {
     setMoodIntensity(5);
     setShowMoodCheckin(false);
     setMoodCheckError('');
+    setInspirationClicks(0);  // ✨ Reset inspiration clicks for new session
     setActiveFeature('chat');
 
     if (isGuest) {
@@ -167,12 +234,84 @@ function App() {
   };
 
   const getMotivationalTip = (): void => {
+    // ✨ Check if user has reached the 5-click limit
+    if (inspirationClicks >= 5) {
+      const limitMessage: Message = {
+        id: Date.now(),
+        text: "You've had a lot of inspiration today! Focus on taking action on what resonates with you. I'm here if you need more support later. 💙",
+        sender: 'bot',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        sentiment: 'positive',
+        sessionId,
+      };
+      setMessages((prev) => [...prev, limitMessage]);
+      setActiveFeature('chat');
+      return;
+    }
+
     const tips = [
+      // Mindfulness & Present Moment
       "You're doing better than you think. Every small step counts! 🌟",
       "Take a deep breath. You've overcome challenges before, and you'll do it again. 💪",
       "Your mental health matters. It's okay to take breaks and prioritize yourself. 🌸",
       "Progress, not perfection. You're on the right path! ✨",
       "Remember: This feeling is temporary. Brighter days are ahead! 🌅",
+      
+      // Self-Compassion
+      "Be kind to yourself today. You're doing the best you can. 💙",
+      "Your struggles don't define you. Your resilience does. 🦋",
+      "Healing isn't linear. Every day is a new opportunity to grow. 🌱",
+      "You deserve rest, joy, and all the good things in life. 🎉",
+      "Your past doesn't predict your future. You have the power to change. ⚡",
+      
+      // Connection & Support
+      "You're never alone in this journey. Reach out to someone you trust. 🤝",
+      "Vulnerability is strength. Sharing your feelings takes courage. 💬",
+      "You matter more than you realize to the people around you. 💕",
+      "Asking for help is a sign of wisdom, not weakness. 🌟",
+      "Connection heals. Let people in today. 🏡",
+      
+      // Growth & Learning
+      "Every challenge is an opportunity to learn more about yourself. 📚",
+      "You're capable of more than you've ever tried. Believe in yourself! 🚀",
+      "Growth happens outside your comfort zone. You've got this! 🌈",
+      "Your struggles are not obstacles; they're stepping stones. 🪜",
+      "The strongest people are those who ask for help. You're strong. 💪",
+      
+      // Joy & Gratitude
+      "Find something small to be grateful for today. It changes everything. 🙏",
+      "Joy is waiting for you. Sometimes you just need to pause and notice it. 🌻",
+      "Celebrate the small wins. They matter more than you think. 🎊",
+      "Your smile has more power than you know. Share it with the world. 😊",
+      "Life is full of beautiful moments. Take time to appreciate them. 📸",
+      
+      // Affirmations
+      "I am worthy of love, happiness, and success. ✨",
+      "I choose to focus on what I can control today. 🎯",
+      "My challenges are temporary; my strength is permanent. 💎",
+      "I am becoming the best version of myself. 🌟",
+      "Today, I choose peace over worry. 🕊️",
+      
+      // Hope & Inspiration
+      "Better days are coming. Hold on just a little longer. 🌙",
+      "Your story isn't over yet. The best is yet to come. 📖",
+      "You are braver than you believe, stronger than you seem, and smarter than you think. 🧠",
+      "The world needs your unique light. Shine bright! ⭐",
+      "You've survived 100% of your worst days. You're undefeated. 🏆",
+      
+      // Self-Care
+      "Take a moment to breathe. Your nervous system will thank you. 🧘",
+      "Boundaries are not selfish; they're necessary. It's okay to say no. 🚧",
+      "Your body and mind deserve rest. Give yourself permission to relax. 😴",
+      "Nourish yourself with kindness, healthy food, and good company. 🍎",
+      "You don't have to earn the right to take care of yourself. Do it anyway. 💅",
+      
+      // Purpose & Meaning
+      "You are here for a reason. Your existence has value. 🌍",
+      "What brings you joy today? Make time for it. 🎨",
+      "Your unique perspective is needed in this world. 👁️",
+      "Follow your heart; it knows the way. 💓",
+      "Purpose is found in the pursuit of what makes you feel alive. 🔥",
     ];
 
     const tipMessage: Message = {
@@ -185,6 +324,8 @@ function App() {
     };
 
     setMessages((prev) => [...prev, tipMessage]);
+    // ✨ Increment the inspiration click counter
+    setInspirationClicks((prev) => prev + 1);
     setActiveFeature('chat');
   };
 
@@ -237,10 +378,12 @@ function App() {
     return responses[sentiment][Math.floor(Math.random() * responses[sentiment].length)];
   };
 
-  // ✅ LOGIN HANDLERS FOR LANDING PAGE
+  // // ✅ LOGIN HANDLERS FOR LANDING PAGE
   const handleLoginAsGuest = () => {
     setIsAuthenticated(true);
     setIsGuest(true);
+    setLoginFromHistory(false);
+    
     // Optional: auto-start with welcome message
     setTimeout(() => {
       const welcomeMsg: Message = {
@@ -258,11 +401,22 @@ function App() {
   if (!isAuthenticated && showLoginPage) {
     return (
       <Login
-        onLogin={(email) => {
-          localStorage.setItem('calmi_auth', email);
+        onLogin={(email, token, userId, userName) => {
           setIsAuthenticated(true);
           setIsGuest(false);
+          setUserId(userId);
+          setUserName(userName);
+          
+          // ✨ If NOT logging in from history, create new chat
+          if (!loginFromHistory) {
+            const newSessionId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+            setSessionId(newSessionId);
+            setMessages([]); // Clear old messages
+          }
+          
+          setLoginFromHistory(false); // Reset flag
           setShowLoginPage(false);
+
         }}
         onShowRegister={() => {
           setShowLoginPage(false);
@@ -281,15 +435,28 @@ function App() {
   if (!isAuthenticated && showRegisterPage) {
     return (
       <Register
-        onRegister={(email) => {
-          localStorage.setItem('calmi_auth', email);
+        onRegister={(email, token, userId, userName) => {
           setIsAuthenticated(true);
           setIsGuest(false);
+          setUserId(userId);
+          setUserName(userName);
+          
+          // ✨ New registration always creates new chat
+          const newSessionId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+          setSessionId(newSessionId);
+          setMessages([]); // Clear old messages
+          
           setShowRegisterPage(false);
+
         }}
         onShowLogin={() => {
           setShowRegisterPage(false);
           setShowLoginPage(true);
+        }}
+        onBackToLanding={() => {
+          setShowRegisterPage(false);
+          setShowLoginPage(false);
+          // isAuthenticated remains false → will render Landing
         }}
       />
     );
@@ -398,7 +565,7 @@ function App() {
               className="w-full bg-white/20 backdrop-blur-lg text-white py-4 rounded-2xl font-semibold hover:bg-white/30 transition-all duration-300 flex items-center justify-center space-x-2 shadow-lg hover:scale-105"
             >
               <Sparkles className="w-5 h-5" />
-              <span>Daily Inspiration</span>
+              <span>Daily Inspiration {inspirationClicks < 5 ? `(${5 - inspirationClicks} left)` : '(Limit reached)'}</span>
             </button>
 
             <button
@@ -413,11 +580,27 @@ function App() {
 
             <button
               onClick={() => {
-                localStorage.removeItem('calmi_auth');
+                
+                // ✨ Clear all user data
+                localStorage.removeItem('calmi_token');
+                localStorage.removeItem('calmi_user');
                 localStorage.removeItem('calmi_guest');
                 localStorage.removeItem('calmi_session');
+                localStorage.removeItem('calmi_messages'); // Clear any guest messages
+                
+                // Reset state
                 setIsAuthenticated(false);
                 setIsGuest(false);
+                setUserId(null);
+                setUserName("");
+                setMessages([]); // Clear messages from memory
+                setLoginFromHistory(false);
+                
+                // Navigate to landing after a brief moment
+                setTimeout(() => {
+                  setShowLoginPage(false);
+                  setShowRegisterPage(false);
+                }, 500);
               }}
               className="w-full mt-4 bg-white/10 text-white py-3 rounded-2xl font-semibold hover:bg-white/20 transition-all duration-300"
             >
@@ -463,6 +646,10 @@ function App() {
               setShowRecordDetail={setShowRecordDetail}
               getMoodEmoji={getMoodEmoji}
               retrieveChatForSession={retrieveChatForSession}
+              isAuthenticated={isAuthenticated}
+              isGuest={isGuest}
+              onOpenPreviousChat={handleOpenPreviousChat}
+              onShowLogin={() => setShowLoginPage(true)}
             />
           )}
         </div>
