@@ -7,14 +7,11 @@ import Mood from './components/Mood';
 import History from './components/History';
 import Login from './pages/Login';
 import Register from './pages/Register';
-// 👇 Import Landing page
 import Landing from './pages/Landing';
 import ForgotPassword from './pages/ForgotPassword';
-// 👇 Import API service
 import { sendChatMessage } from './services/apiService';
 
 function App() {
-  // ✅ Move it here, right after other useState calls
   const [showForgotPassword, setShowForgotPassword] = useState<boolean>(false);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => !!localStorage.getItem('calmi_token'));
   const [showRegisterPage, setShowRegisterPage] = useState<boolean>(false);
@@ -29,10 +26,10 @@ function App() {
     return user ? JSON.parse(user).full_name || '' : '';
   });
 
-  // ✨ Track daily inspiration clicks (limit to 5 per session)
+  // Track daily inspiration clicks (limit to 5 per session)
   const [inspirationClicks, setInspirationClicks] = useState<number>(0);
 
-  // ✨ Track if login came from history (to restore chat) or normal login (new chat)
+  // Track if login came from history (to restore chat) or normal login (new chat)
   const [loginFromHistory, setLoginFromHistory] = useState<boolean>(false);
 
 
@@ -60,7 +57,7 @@ function App() {
   // Helper to check if mood check-in is allowed for current session
   const canCheckInMood = !moodHistory.some((entry) => entry.sessionId === sessionId);
 
-  // 👇 Persist session ID and guest status in localStorage when needed
+  // Persist session ID and guest status in localStorage when needed
   useEffect(() => {
     if (isGuest) {
       localStorage.setItem('calmi_guest', 'true');
@@ -79,7 +76,7 @@ function App() {
     setShowRecordDetail(false);
   };
 
-  // ✅ Handle opening a previous chat from history
+  // Handle opening a previous chat from history
   const handleOpenPreviousChat = (previousMessages: Message[]) => {
     // Use the session ID from the first message if available
     const sessionId = previousMessages.length > 0 ? previousMessages[0].sessionId : `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -104,7 +101,7 @@ function App() {
     scrollToBottom();
   }, [messages]);
 
-  // ✨ Personalized greeting based on authentication and userName
+  // Personalized greeting based on authentication and userName
   useEffect(() => {
     if (isAuthenticated && messages.length === 0) {
       setTimeout(() => {
