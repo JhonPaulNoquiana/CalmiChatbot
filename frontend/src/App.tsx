@@ -9,11 +9,13 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 // 👇 Import Landing page
 import Landing from './pages/Landing';
+import ForgotPassword from './pages/ForgotPassword';
 // 👇 Import API service
 import { sendChatMessage } from './services/apiService';
 
 function App() {
   // ✅ Move it here, right after other useState calls
+  const [showForgotPassword, setShowForgotPassword] = useState<boolean>(false);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => !!localStorage.getItem('calmi_token'));
   const [showRegisterPage, setShowRegisterPage] = useState<boolean>(false);
   const [showLoginPage, setShowLoginPage] = useState<boolean>(false); // ✅ FIXED
@@ -397,11 +399,28 @@ function App() {
     }, 300);
   };
 
+  // 3. Show Forgot Password if requested
+  if (!isAuthenticated && showForgotPassword) {
+    return (
+      <ForgotPassword
+        onBackToLogin={() => {
+          setShowForgotPassword(false);
+          setShowLoginPage(true);
+        }}
+        onSuccess={() => {
+          // Optional: Show success message or auto-login
+          setShowForgotPassword(false);
+          setShowLoginPage(true);
+        }}
+      />
+    );
+  }
+
   // 1. Show Login if explicitly requested
   if (!isAuthenticated && showLoginPage) {
     return (
       <Login
-        onLogin={(email, token, userId, userName) => {
+        onLogin={(_email, _token, userId, userName) => {
           setIsAuthenticated(true);
           setIsGuest(false);
           setUserId(userId);
@@ -426,6 +445,10 @@ function App() {
           setShowLoginPage(false);
           setShowRegisterPage(false);
           // isAuthenticated remains false → will render Landing
+        }}
+        onShowForgotPassword={() => {
+          setShowForgotPassword(true);
+          setShowLoginPage(false);
         }}
       />
     );

@@ -5,9 +5,10 @@ interface Props {
   onLogin: (email: string, token: string, userId: number, userName: string) => void;
   onShowRegister: () => void;
   onBackToLanding?: () => void;
+  onShowForgotPassword?: () => void; // New prop for forgot password
 }
 
-export default function Login({ onLogin, onShowRegister, onBackToLanding }: Props) {
+export default function Login({ onLogin, onShowRegister, onBackToLanding, onShowForgotPassword }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -62,7 +63,19 @@ export default function Login({ onLogin, onShowRegister, onBackToLanding }: Prop
           </div>
 
           <div>
-            <label className="block text-sm font-semibold mb-1">Password</label>
+            <div className="flex justify-between items-center mb-1">
+              <label className="block text-sm font-semibold">Password</label>
+              {onShowForgotPassword && (
+                <button
+                  type="button"
+                  onClick={onShowForgotPassword}
+                  disabled={isLoading}
+                  className="text-sm text-indigo-600 hover:text-indigo-800 font-medium underline"
+                >
+                  Forgot password?
+                </button>
+              )}
+            </div>
             <input
               type="password"
               value={password}

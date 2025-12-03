@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
@@ -20,6 +20,7 @@ class User(db.Model):
     messages = db.relationship('Message', backref='user', lazy=True, cascade='all, delete-orphan')
     mood_entries = db.relationship('MoodEntry', backref='user', lazy=True, cascade='all, delete-orphan')
     chat_sessions = db.relationship('ChatSession', backref='user', lazy=True, cascade='all, delete-orphan')
+    password_reset_tokens = db.relationship('PasswordResetToken', back_populates='user', lazy=True, cascade='all, delete-orphan')
     
     def to_dict(self):
         """Convert user to dictionary"""
@@ -118,3 +119,37 @@ class MoodEntry(db.Model):
             'tags': self.tags.split(',') if self.tags else [],
             'created_at': self.created_at.isoformat()
         }
+        
+class PasswordResetToken(db.Model):
+    """Password reset token model for password reset functionality"""
+    __tablename__ = 'password_reset_tokens'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    reset_code = db.Column(db.String(6), nullable=False)  # 6-digit code
+    expires_at = db.Column(db.DateTime, nullable=False, index=True)
+    used = db.Column(db.Boolean, default=False, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    
+    # Relationship
+    user = db.relationship('User', back_populates='password_reset_tokens')
+    
+    def is_expired(self):
+        """Check if token has expired"""
+        return datetime.utcnow() > self.expires_at
+    
+    def is_valid(self):
+        """Check if token is valid and not used"""
+        return not self.used and not self.is_expired()
+    
+    def to_dict(self):
+        """Convert token to dictionary"""
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'expires_at': self.expires_at.isoformat(),
+            'used': self.used,
+            'created_at': self.created_at.isoformat(),
+            'is_valid': self.is_valid(),
+            'minutes_remaining': int((self.expires_at - datetime.utcnow()).total_seconds() / 60) if not self.is_expired() else 0
+        }        
