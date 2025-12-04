@@ -17,10 +17,7 @@ function App() {
   const [showRegisterPage, setShowRegisterPage] = useState<boolean>(false);
   const [showLoginPage, setShowLoginPage] = useState<boolean>(false);
   const [isGuest, setIsGuest] = useState<boolean>(() => localStorage.getItem('calmi_guest') === 'true');
-  const [userId, setUserId] = useState<number | null>(() => {
-    const user = localStorage.getItem('calmi_user');
-    return user ? JSON.parse(user).id : null;
-  });
+  // Removed unused userId state variable
   const [userName, setUserName] = useState<string>(() => {
     const user = localStorage.getItem('calmi_user');
     return user ? JSON.parse(user).full_name || '' : '';
@@ -111,7 +108,7 @@ function App() {
         setMessages([welcomeMsg]);
       }, 300);
     }
-  }, [isAuthenticated, userName, sessionId]);
+  }, [isAuthenticated, userName, sessionId, isGuest, messages.length]);
 
   const sendMessage = async (): Promise<void> => {
     if (!inputMessage.trim()) return;
@@ -354,6 +351,7 @@ function App() {
     return responses[sentiment][Math.floor(Math.random() * responses[sentiment].length)];
   };
 
+  // ✅ LOGIN HANDLERS FOR LANDING PAGE
   const handleLoginAsGuest = () => {
     setIsAuthenticated(true);
     setIsGuest(true);
@@ -389,10 +387,9 @@ function App() {
   if (!isAuthenticated && showLoginPage) {
     return (
       <Login
-        onLogin={(_email, _token, userId, userName) => {
+        onLogin={(_email, _token, _userId, userName) => {
           setIsAuthenticated(true);
           setIsGuest(false);
-          setUserId(userId);
           setUserName(userName);
           
           if (!loginFromHistory) {
@@ -423,10 +420,9 @@ function App() {
   if (!isAuthenticated && showRegisterPage) {
     return (
       <Register
-        onRegister={(email, token, userId, userName) => {
+        onRegister={(_email, _token, _userId, userName) => {
           setIsAuthenticated(true);
           setIsGuest(false);
-          setUserId(userId);
           setUserName(userName);
           
           const newSessionId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -615,7 +611,6 @@ function App() {
                 
                 setIsAuthenticated(false);
                 setIsGuest(false);
-                setUserId(null);
                 setUserName("");
                 setMessages([]);
                 setLoginFromHistory(false);
