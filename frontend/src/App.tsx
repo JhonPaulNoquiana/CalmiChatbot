@@ -11,6 +11,7 @@ import Landing from './pages/Landing';
 import ForgotPassword from './pages/ForgotPassword';
 import { sendChatMessage } from './services/apiService';
 import { submitMoodCheckIn as apiSubmitMoodCheckIn } from './services/apiService';
+import { getUserMoodHistory } from './services/apiService';
 
 function App() {
   const [showForgotPassword, setShowForgotPassword] = useState<boolean>(false);
@@ -77,14 +78,49 @@ function App() {
     setIsMobileSidebarOpen(false);
   };
 
-  const moodOptions = [
-    { emoji: '😊', label: 'Happy', value: 'happy', color: 'from-yellow-100 to-orange-100' },
-    { emoji: '😢', label: 'Sad', value: 'sad', color: 'from-blue-100 to-indigo-100' },
-    { emoji: '😰', label: 'Anxious', value: 'anxious', color: 'from-purple-100 to-pink-100' },
-    { emoji: '😤', label: 'Stressed', value: 'stressed', color: 'from-red-100 to-orange-100' },
-    { emoji: '😴', label: 'Tired', value: 'tired', color: 'from-gray-100 to-slate-100' },
-    { emoji: '😐', label: 'Neutral', value: 'neutral', color: 'from-green-100 to-teal-100' },
-  ];
+const moodOptions = [
+  { emoji: '😊', label: 'Happy', value: 'happy', color: 'from-yellow-100 to-orange-100' },
+  { emoji: '😢', label: 'Sad', value: 'sad', color: 'from-blue-100 to-indigo-100' },
+  { emoji: '😰', label: 'Anxious', value: 'anxious', color: 'from-purple-100 to-pink-100' },
+  { emoji: '😔', label: 'Lonely', value: 'lonely', color: 'from-indigo-100 to-gray-100' }, 
+  { emoji: '😡', label: 'Angry', value: 'angry', color: 'from-red-100 to-rose-100' },
+  { emoji: '😤', label: 'Stressed', value: 'stressed', color: 'from-orange-100 to-red-100' },
+  { emoji: '😴', label: 'Tired', value: 'tired', color: 'from-gray-100 to-slate-100' },
+  { emoji: '😐', label: 'Neutral', value: 'neutral', color: 'from-green-100 to-teal-100' },
+];
+  
+  useEffect(() => {
+  const loadMoodHistory = async () => {
+    if (isAuthenticated && !isGuest) {
+      try {
+        console.log('📊 Loading mood history from database...');
+        const data = await getUserMoodHistory();
+        
+        // Convert backend format to frontend MoodEntry format
+        const formattedHistory: MoodEntry[] = data.mood_history.map((entry: any) => ({
+          id: entry.id,
+          mood: entry.mood,
+          intensity: entry.intensity,
+          timestamp: new Date(entry.created_at).toLocaleString([], { 
+            month: 'short', 
+            day: 'numeric', 
+            hour: '2-digit', 
+            minute: '2-digit' 
+          }),
+          note: entry.note || '',
+          sessionId: entry.session_id_string || String(entry.session_id),
+        }));
+        
+        setMoodHistory(formattedHistory);
+        console.log('✅ Loaded mood history:', formattedHistory.length, 'entries');
+      } catch (error) {
+        console.error('❌ Failed to load mood history:', error);
+      }
+    }
+  };
+
+  loadMoodHistory();
+}, [isAuthenticated, isGuest]);
 
   const scrollToBottom = (): void => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -169,69 +205,69 @@ function App() {
   };
 
   const submitMoodCheckIn = async (): Promise<void> => {
-  if (!currentMood) return;
+    if (!currentMood) return;
 
-  // Check if already checked in for this session
-  if (moodHistory.some((entry) => entry.sessionId === sessionId)) {
-    setMoodCheckError('One Mood Check In per chat');
-    setShowMoodCheckin(false);
-    return;
-  }
+    // Check if already checked in for this session (local check)
+    if (moodHistory.some((entry) => entry.sessionId === sessionId)) {
+      setMoodCheckError('One Mood Check In per chat');
+      setShowMoodCheckin(false);
+      return;
+    }
 
-  try {
-    const response = await apiSubmitMoodCheckIn(
-      sessionId,
-      currentMood,
-      moodIntensity,
-      moodNote
-    );
+    try {
+      const response = await apiSubmitMoodCheckIn(
+        sessionId,
+        currentMood,
+        moodIntensity,
+        moodNote
+      );
 
-    console.log('✅ Mood check-in saved to database:', response);
+      console.log('✅ Mood check-in saved to database:', response);
 
-    // Create local mood entry for immediate UI update
-    const moodEntry: MoodEntry = {
-      id: response.mood_entry.id,  // Use the ID from the database
-      mood: currentMood,
-      intensity: moodIntensity,
-      timestamp: new Date().toLocaleString([], { 
-        month: 'short', 
-        day: 'numeric', 
-        hour: '2-digit', 
-        minute: '2-digit' 
-      }),
-      note: moodNote,
-      sessionId,
-    };
+      // Create local mood entry for immediate UI update
+      const moodEntry: MoodEntry = {
+        id: response.mood_entry.id,
+        mood: currentMood,
+        intensity: moodIntensity,
+        timestamp: new Date().toLocaleString([], { 
+          month: 'short', 
+          day: 'numeric', 
+          hour: '2-digit', 
+          minute: '2-digit' 
+        }),
+        note: moodNote,
+        sessionId, // Use the current session string ID
+      };
 
-    setMoodHistory((prev) => [moodEntry, ...prev]);
+      setMoodHistory((prev) => [moodEntry, ...prev]);
 
-    // Send confirmation bot message
-    const botMessage: Message = {
-      id: Date.now() + 1,
-      text: `Thank you for checking in! I've recorded that you're feeling ${currentMood}. Remember, it's okay to feel this way. I'm here whenever you need support. 💙`,
-      sender: 'bot',
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      sentiment: getMoodSentiment(currentMood),
-      sessionId,
-    };
+      // Send confirmation bot message
+      const botMessage: Message = {
+        id: Date.now() + 1,
+        text: `Thank you for checking in! I've recorded that you're feeling ${currentMood}. Remember, it's okay to feel this way. I'm here whenever you need support. 💙`,
+        sender: 'bot',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        sentiment: getMoodSentiment(currentMood),
+        sessionId,
+      };
 
-    setMessages((prev) => [...prev, botMessage]);
-    
-    // Reset form
-    setShowMoodCheckin(false);
-    setCurrentMood('');
-    setMoodNote('');
-    setMoodIntensity(5);
-    setActiveFeature('chat');
-    setIsMobileSidebarOpen(false);
-    
-  } catch (error: any) {
-    console.error('Failed to save mood check-in:', error);
-    
-    // Show error to user
-    setMoodCheckError(error.message || 'Failed to save mood check-in. Please try again.');
-    setShowMoodCheckin(false);
-  }
+      setMessages((prev) => [...prev, botMessage]);
+      
+      // Reset form
+      setShowMoodCheckin(false);
+      setCurrentMood('');
+      setMoodNote('');
+      setMoodIntensity(5);
+      setActiveFeature('chat');
+      setIsMobileSidebarOpen(false);
+      
+    } catch (error: any) {
+      console.error('❌ Failed to save mood check-in:', error);
+      
+      // Show error to user
+      setMoodCheckError(error.message || 'Failed to save mood check-in. Please try again.');
+      setShowMoodCheckin(false);
+    }
 };
 
   const startNewChat = () => {
@@ -336,18 +372,23 @@ function App() {
     return option?.emoji || '😐';
   };
 
-  const getMoodSentiment = (mood: string): 'positive' | 'neutral' | 'negative' => {
-    switch (mood) {
-      case 'happy': return 'positive';
-      case 'sad': case 'anxious': case 'stressed': return 'negative';
-      case 'tired': case 'neutral': return 'neutral';
-      default: return 'neutral';
-    }
-  };
+const getMoodSentiment = (mood: string): 'positive' | 'neutral' | 'negative' => {
+  switch (mood) {
+    case 'happy': return 'positive';
+    case 'sad': 
+    case 'anxious':
+    case 'lonely':
+    case 'stressed': 
+        case 'tired': 
+    case 'angry': return 'negative';
+    case 'neutral': return 'neutral';
+    default: return 'neutral';
+  }
+};
 
   const detectUserSentiment = (message: string): 'positive' | 'neutral' | 'negative' => {
     const lowerMessage = message.toLowerCase();
-    const negativeKeywords = ['sad', 'depressed', 'anxious', 'stressed', 'worried', 'angry', 'frustrated', 'lonely', 'hurt', 'pain', 'bad', 'terrible', 'awful', 'hate', 'scared', 'fear'];
+    const negativeKeywords = ['sad', 'depressed', 'anxious', 'stressed', 'worried', 'tired', 'angry', 'frustrated', 'lonely', 'hurt', 'pain', 'bad', 'terrible', 'awful', 'hate', 'scared', 'fear'];
     if (negativeKeywords.some(word => lowerMessage.includes(word))) return 'negative';
     
     const positiveKeywords = ['happy', 'good', 'great', 'amazing', 'wonderful', 'love', 'excited', 'grateful', 'blessed', 'awesome', 'fantastic'];
@@ -380,7 +421,7 @@ function App() {
     return responses[sentiment][Math.floor(Math.random() * responses[sentiment].length)];
   };
 
-  // ✅ LOGIN HANDLERS FOR LANDING PAGE
+
   const handleLoginAsGuest = () => {
     setIsAuthenticated(true);
     setIsGuest(true);

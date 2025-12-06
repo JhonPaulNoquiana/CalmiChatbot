@@ -21,24 +21,24 @@ export default function Mood({ currentMood, setCurrentMood, moodIntensity, setMo
       <>
         {showMoodCheckin && (
           <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-            <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-gray-100 animate-scale-in">
-              <h3 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-2">
+            <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl border border-gray-100 animate-scale-in max-h-[90vh] overflow-y-auto">
+              <h3 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-2">
                 Quick Mood Check-in
               </h3>
-              <p className="text-gray-600 mb-6">How are you feeling right now?</p>
+              <p className="text-gray-600 mb-6 text-sm sm:text-base">How are you feeling right now?</p>
 
-              <div className="grid grid-cols-3 gap-3 mb-6">
+              <div className="grid grid-cols-4 gap-3 mb-6">
                 {moodOptions.map((mood) => (
                   <button
                     key={mood.value}
                     onClick={() => setCurrentMood(mood.value)}
-                    className={`p-4 rounded-2xl border-2 text-center transition-all duration-300 ${
+                    className={`p-3 sm:p-4 rounded-2xl border-2 text-center transition-all duration-300 ${
                       currentMood === mood.value
                         ? 'border-indigo-500 bg-gradient-to-br ' + mood.color + ' shadow-lg scale-105'
                         : 'border-gray-200 hover:border-indigo-300 hover:shadow-md hover:scale-102'
                     }`}
                   >
-                    <div className="text-3xl mb-2">{mood.emoji}</div>
+                    <div className="text-2xl sm:text-3xl mb-1 sm:mb-2">{mood.emoji}</div>
                     <div className="text-xs font-semibold text-gray-700">{mood.label}</div>
                   </button>
                 ))}
@@ -50,14 +50,14 @@ export default function Mood({ currentMood, setCurrentMood, moodIntensity, setMo
                     setShowMoodCheckin(false);
                     setCurrentMood('');
                   }}
-                  className="flex-1 border-2 border-gray-200 text-gray-700 py-3 rounded-2xl font-semibold hover:bg-gray-50 transition-all duration-300 hover:scale-105"
+                  className="flex-1 border-2 border-gray-200 text-gray-700 py-2.5 sm:py-3 rounded-2xl font-semibold hover:bg-gray-50 transition-all duration-300 hover:scale-105 text-sm sm:text-base"
                 >
                   Skip
                 </button>
                 <button
                   onClick={submitMoodCheckIn}
                   disabled={!currentMood}
-                  className="flex-1 bg-gradient-to-r from-indigo-500 to-purple-500 text-white py-3 rounded-2xl font-semibold hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 hover:scale-105"
+                  className="flex-1 bg-gradient-to-r from-indigo-500 to-purple-500 text-white py-2.5 sm:py-3 rounded-2xl font-semibold hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 hover:scale-105 text-sm sm:text-base"
                 >
                   Check-in
                 </button>
@@ -71,38 +71,39 @@ export default function Mood({ currentMood, setCurrentMood, moodIntensity, setMo
 
   return (
     <>
-      <div className="flex-1 p-8 overflow-y-auto">
-        <div className="max-w-2xl mx-auto">
-          <div className="text-center mb-10">
-            <div className="bg-gradient-to-br from-indigo-100 to-purple-100 p-5 rounded-3xl inline-block mb-5 shadow-lg">
-              <Smile className="w-14 h-14 text-indigo-600" />
+      <div className="flex-1 p-4 sm:p-8 overflow-y-auto">
+        <div className="max-w-3xl mx-auto">
+          <div className="text-center mb-8 sm:mb-10">
+            <div className="bg-gradient-to-br from-indigo-100 to-purple-100 p-4 sm:p-5 rounded-3xl inline-block mb-4 sm:mb-5 shadow-lg">
+              <Smile className="w-12 h-12 sm:w-14 sm:h-14 text-indigo-600" />
             </div>
-            <h2 className="text-4xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-3">
+            <h2 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-2 sm:mb-3">
               How are you feeling?
             </h2>
-            <p className="text-gray-600 text-lg">Take a moment to check in with yourself</p>
+            <p className="text-gray-600 text-base sm:text-lg">Take a moment to check in with yourself</p>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
+          {/* 7 moods in responsive grid: 2 cols mobile, 3 cols tablet, 4 cols desktop */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 mb-8">
             {moodOptions.map((mood) => (
               <button
                 key={mood.value}
                 onClick={() => setCurrentMood(mood.value)}
-                className={`p-6 rounded-3xl border-2 text-center transition-all duration-300 ${
+                className={`p-4 sm:p-6 rounded-3xl border-2 text-center transition-all duration-300 ${
                   currentMood === mood.value
                     ? 'border-indigo-500 bg-gradient-to-br ' + mood.color + ' shadow-xl scale-105'
                     : 'border-gray-200 bg-white hover:border-indigo-300 hover:shadow-lg hover:scale-102'
                 }`}
               >
-                <div className="text-4xl mb-3">{mood.emoji}</div>
-                <div className="font-semibold text-gray-800">{mood.label}</div>
+                <div className="text-3xl sm:text-4xl mb-2 sm:mb-3">{mood.emoji}</div>
+                <div className="font-semibold text-gray-800 text-sm sm:text-base">{mood.label}</div>
               </button>
             ))}
           </div>
 
           {currentMood && (
-            <div className="space-y-6 animate-fade-in">
-              <div className="bg-white rounded-3xl p-6 shadow-lg border border-gray-100">
+            <div className="space-y-4 sm:space-y-6 animate-fade-in">
+              <div className="bg-white rounded-3xl p-5 sm:p-6 shadow-lg border border-gray-100">
                 <label className="block text-sm font-semibold text-gray-700 mb-4">
                   Intensity Level: <span className="text-indigo-600 text-lg">{moodIntensity}/10</span>
                 </label>
@@ -119,20 +120,20 @@ export default function Mood({ currentMood, setCurrentMood, moodIntensity, setMo
                 />
               </div>
 
-              <div className="bg-white rounded-3xl p-6 shadow-lg border border-gray-100">
+              <div className="bg-white rounded-3xl p-5 sm:p-6 shadow-lg border border-gray-100">
                 <label className="block text-sm font-semibold text-gray-700 mb-3">Additional notes (optional)</label>
                 <textarea
                   value={moodNote}
                   onChange={(e) => setMoodNote(e.target.value)}
                   placeholder="What's contributing to this mood?"
-                  className="w-full border-2 border-gray-200 rounded-2xl p-4 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent resize-none transition-all duration-300"
+                  className="w-full border-2 border-gray-200 rounded-2xl p-3 sm:p-4 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent resize-none transition-all duration-300 text-sm sm:text-base"
                   rows={4}
                 />
               </div>
 
               <button
                 onClick={submitMoodCheckIn}
-                className="w-full bg-gradient-to-r from-indigo-500 to-purple-500 text-white py-5 rounded-2xl font-bold text-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
+                className="w-full bg-gradient-to-r from-indigo-500 to-purple-500 text-white py-4 sm:py-5 rounded-2xl font-bold text-base sm:text-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
               >
                 Submit Mood Check-in
               </button>
@@ -143,4 +144,3 @@ export default function Mood({ currentMood, setCurrentMood, moodIntensity, setMo
     </>
   );
 }
-

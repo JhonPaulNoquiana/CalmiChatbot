@@ -94,7 +94,8 @@ class MoodEntry(db.Model):
     """Mood entry model for tracking user moods"""
     __tablename__ = 'mood_entries'
     
-    VALID_MOODS = ['happy', 'sad', 'anxious', 'calm', 'angry', 'neutral', 'confused']
+    # ✅ COMBINED: All 7 moods
+    VALID_MOODS = ['happy', 'sad', 'anxious', 'angry', 'lonely','stressed', 'tired', 'neutral']
     
     id = db.Column(db.Integer, primary_key=True)
     session_id = db.Column(db.Integer, db.ForeignKey('chat_sessions.id'), nullable=False, index=True)

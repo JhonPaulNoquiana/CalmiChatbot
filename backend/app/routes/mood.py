@@ -76,6 +76,73 @@ def create_mood_entry():
         print(f"Error creating mood entry: {e}")
         return {'error': 'Failed to create mood entry', 'details': str(e)}, 500
 
+def get_user_mood_history():
+    """Get all mood entries for the authenticated user"""
+    try:
+        limit = int(request.args.get('limit', 100))
+        offset = int(request.args.get('offset', 0))
+        
+        # Get all mood entries for this user, ordered by most recent
+        mood_entries = MoodEntry.query.filter_by(
+            user_id=request.user_id
+        ).order_by(MoodEntry.created_at.desc()).offset(offset).limit(limit).all()
+        
+        total = MoodEntry.query.filter_by(user_id=request.user_id).count()
+        
+        # Convert to dict and add session_id string for frontend
+        mood_data = []
+        for entry in mood_entries:
+            entry_dict = entry.to_dict()
+            # Get the session_id string from the ChatSession
+            session = ChatSession.query.get(entry.session_id)
+            if session:
+                entry_dict['session_id_string'] = session.session_id
+            mood_data.append(entry_dict)
+        
+        return {
+            'mood_history': mood_data,
+            'total': total,
+            'count': len(mood_entries)
+        }, 200
+    
+    except Exception as e:
+        print(f"Error fetching user mood history: {e}")
+        return {'error': 'Failed to fetch mood history', 'details': str(e)}, 500
+        
+@mood_bp.route('/user/history', methods=['GET'])
+@token_required
+def get_user_mood_history():
+    """Get all mood entries for the authenticated user"""
+    try:
+        limit = int(request.args.get('limit', 100))
+        offset = int(request.args.get('offset', 0))
+        
+        # Get all mood entries for this user, ordered by most recent
+        mood_entries = MoodEntry.query.filter_by(
+            user_id=request.user_id
+        ).order_by(MoodEntry.created_at.desc()).offset(offset).limit(limit).all()
+        
+        total = MoodEntry.query.filter_by(user_id=request.user_id).count()
+        
+        # Convert to dict and add session_id string for frontend
+        mood_data = []
+        for entry in mood_entries:
+            entry_dict = entry.to_dict()
+            # Get the session_id string from the ChatSession
+            session = ChatSession.query.get(entry.session_id)
+            if session:
+                entry_dict['session_id_string'] = session.session_id
+            mood_data.append(entry_dict)
+        
+        return {
+            'mood_history': mood_data,
+            'total': total,
+            'count': len(mood_entries)
+        }, 200
+    
+    except Exception as e:
+        print(f"Error fetching user mood history: {e}")
+        return {'error': 'Failed to fetch mood history', 'details': str(e)}, 500
 
 @mood_bp.route('/history/<int:session_id>', methods=['GET'])
 def get_mood_history(session_id):

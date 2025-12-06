@@ -187,7 +187,7 @@ export const registerUser = async (email: string, password: string, fullName: st
     
     return data;
   } catch (error) {
-    console.error('❌ Registration error:', error);
+    console.error('Registration error:', error);
     throw error;
   }
 };
@@ -218,7 +218,7 @@ export const loginUser = async (email: string, password: string): Promise<AuthRe
     
     return data;
   } catch (error) {
-    console.error('❌ Login error:', error);
+    console.error('Login error:', error);
     throw error;
   }
 };
@@ -261,14 +261,14 @@ export const getUserSessions = async (): Promise<SessionsResponse> => {
     const data: SessionsResponse = await response.json();
     return data;
   } catch (error) {
-    console.error('❌ Error fetching sessions:', error);
+    console.error('Error fetching sessions:', error);
     throw error;
   }
 };
 
 export const getChatHistory = async (sessionId: number): Promise<any> => {
   try {
-    console.log('💬 Fetching chat history for session:', sessionId);
+    console.log('Fetching chat history for session:', sessionId);
     
     const response = await fetch(`${API_BASE_URL}/api/chat/history/${sessionId}`, {
       method: 'GET',
@@ -282,24 +282,45 @@ export const getChatHistory = async (sessionId: number): Promise<any> => {
     const data = await response.json();
     return data;
   } catch (error) {
-    console.error('❌ Error fetching chat history:', error);
+    console.error('Error fetching chat history:', error);
     throw error;
   }
 };
-// Add this function to your existing apiService.ts file
+
+export const getUserMoodHistory = async (): Promise<any> => {
+  try {
+    console.log('📊 Fetching user mood history');
+    
+    const response = await fetch(`${API_BASE_URL}/api/mood/user/history`, {
+      method: 'GET',
+      headers: getHeaders(true), 
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch mood history: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log('Mood history fetched:', data);
+    return data;
+  } catch (error) {
+    console.error('Error fetching mood history:', error);
+    throw error;
+  }
+};
 
 // Replace the deleteSession function in apiService.ts
 export const deleteSession = async (sessionId: number): Promise<{ message: string }> => {
   try {
     const token = getAuthToken();
-    console.log('🗑️ Deleting session:', sessionId, 'with token:', token ? 'Present' : 'Missing');
+    console.log('Deleting session:', sessionId, 'with token:', token ? 'Present' : 'Missing');
     
     const response = await fetch(`${API_BASE_URL}/api/chat/session/${sessionId}`, {
       method: 'DELETE',
       headers: getHeaders(true),
     });
 
-    console.log('🔵 Delete response status:', response.status);
+    console.log('Delete response status:', response.status);
     
     if (!response.ok) {
       // Try to parse error response
@@ -319,10 +340,10 @@ export const deleteSession = async (sessionId: number): Promise<{ message: strin
     }
 
     const data = await response.json();
-    console.log('✅ Delete successful:', data);
+    console.log('Delete successful:', data);
     return data;
   } catch (error) {
-    console.error('❌ Error in deleteSession:', error);
+    console.error('Error in deleteSession:', error);
     
     // Re-throw as an Error object if it isn't already
     if (error instanceof Error) {
