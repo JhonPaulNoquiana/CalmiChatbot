@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { MoodEntry, Message } from '../types';
-import { History as HistoryIcon, MessageSquare, X } from 'lucide-react';
-import { getUserSessions, getChatHistory } from '../services/apiService';
+import { History as HistoryIcon, MessageSquare, X, Trash2 } from 'lucide-react';
+import { getUserSessions, getChatHistory, deleteSession } from '../services/apiService';
 
 interface HistoryProps {
   moodHistory: MoodEntry[];
@@ -18,6 +18,7 @@ interface HistoryProps {
 interface ChatSession {
   id: number;
   session_id: string;
+  user_id: number | null;  
   is_guest: boolean;
   started_at: string;
   message_count: number;
@@ -40,6 +41,8 @@ export default function History({ moodHistory, setSelectedRecord, setShowRecordD
   const [sessionMessages, setSessionMessages] = useState<Record<number, ChatMessage[]>>({});
   const [selectedSessionChat, setSelectedSessionChat] = useState<ChatSession | null>(null);
   const [loadingChat, setLoadingChat] = useState(false);
+  const [deletingSessionId, setDeletingSessionId] = useState<number | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<number | null>(null);
 
   // Load chat sessions for authenticated users
   useEffect(() => {
@@ -49,16 +52,37 @@ export default function History({ moodHistory, setSelectedRecord, setShowRecordD
   }, [isAuthenticated, isGuest]);
 
   const loadSessions = async () => {
-    try {
-      setLoadingSessions(true);
-      const data = await getUserSessions();
-      setSessions(data.sessions);
-    } catch (error) {
-      console.error('Failed to load sessions:', error);
-    } finally {
-      setLoadingSessions(false);
-    }
-  };
+  try {
+    setLoadingSessions(true);
+    const data = await getUserSessions();
+    
+    console.log('=== LOADED SESSIONS DEBUG ===');
+    console.log('Total sessions:', data.sessions.length);
+    
+    // Get current user for comparison
+    const userStr = localStorage.getItem('calmi_user');
+    const user = userStr ? JSON.parse(userStr) : null;
+    
+    // Log each session's ownership info
+    data.sessions.forEach((session, index) => {
+      const ownsSession = user && session.user_id === user.id;
+      console.log(`Session ${index + 1}:`, {
+        id: session.id,
+        user_id: session.user_id,
+        is_guest: session.is_guest,
+        session_id: session.session_id,
+        started_at: session.started_at,
+        'Current user owns this': ownsSession ? '✅ YES' : '❌ NO'
+      });
+    });
+    
+    setSessions(data.sessions);
+  } catch (error) {
+    console.error('Failed to load sessions:', error);
+  } finally {
+    setLoadingSessions(false);
+  }
+};
 
   const loadSessionMessages = async (sessionId: number) => {
     if (sessionMessages[sessionId]) return; // Already loaded
@@ -75,6 +99,81 @@ export default function History({ moodHistory, setSelectedRecord, setShowRecordD
       setLoadingChat(false);
     }
   };
+
+  const handleDeleteSession = async (sessionId: number, e: React.MouseEvent) => {
+  e.stopPropagation();
+  try {
+    setDeletingSessionId(sessionId);
+    
+    // Get current user info
+    const userStr = localStorage.getItem('calmi_user');
+    const user = userStr ? JSON.parse(userStr) : null;
+    const token = localStorage.getItem('calmi_token');
+    
+    console.log('=== DELETE SESSION DEBUG ===');
+    console.log('👤 Current user:', user);
+    console.log('👤 Current user ID:', user?.id);
+    console.log('🔑 Token exists:', !!token);
+    console.log('🗑️ Deleting session ID:', sessionId);
+    
+    // Find session details
+    const sessionToDelete = sessions.find(s => s.id === sessionId);
+    if (sessionToDelete) {
+      console.log('📋 Session details:', {
+        session_id: sessionToDelete.session_id,
+        user_id: sessionToDelete.user_id,  // Now this will work
+        is_guest: sessionToDelete.is_guest,
+        started_at: sessionToDelete.started_at,
+        message_count: sessionToDelete.message_count
+      });
+      
+      // Check if the current user owns this session
+      const ownsSession = user && sessionToDelete.user_id === user.id;
+      console.log('🔍 Ownership check:', {
+        'Current user ID': user?.id,
+        'Session user ID': sessionToDelete.user_id,
+        'User owns session': ownsSession
+      });
+    }
+    
+    await deleteSession(sessionId);
+    
+    console.log('✅ Delete successful');
+    
+    // Remove from local state
+    setSessions(prev => prev.filter(s => s.id !== sessionId));
+    
+    // Remove from messages cache
+    setSessionMessages(prev => {
+      const newMessages = { ...prev };
+      delete newMessages[sessionId];
+      return newMessages;
+    });
+    
+    // Close confirmation dialog
+    setShowDeleteConfirm(null);
+    
+    // If this was the selected session, close it
+    if (selectedSessionChat?.id === sessionId) {
+      setSelectedSessionChat(null);
+    }
+    
+  } catch (error) {
+    console.error('❌ Failed to delete session:', error);
+    
+    // Show more detailed error
+    if (error instanceof Error) {
+      console.log('Error details:', {
+        message: error.message,
+        name: error.name
+      });
+    }
+    
+    alert(`Failed to delete chat session: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  } finally {
+    setDeletingSessionId(null);
+  }
+};
 
   const openChatSession = async (session: ChatSession) => {
     setSelectedSessionChat(session);
@@ -100,13 +199,49 @@ export default function History({ moodHistory, setSelectedRecord, setShowRecordD
               <h2 className="text-2xl font-bold text-gray-800">Chat Session</h2>
               <p className="text-sm text-gray-500">{formatDate(selectedSessionChat.started_at)}</p>
             </div>
-            <button
-              onClick={() => setSelectedSessionChat(null)}
-              className="p-2 hover:bg-gray-100 rounded-xl transition-colors"
-            >
-              <X className="w-6 h-6 text-gray-600" />
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={(e) => {
+                  setShowDeleteConfirm(selectedSessionChat.id);
+                }}
+                className="p-2 hover:bg-red-50 rounded-xl transition-colors group"
+                title="Delete this chat"
+              >
+                <Trash2 className="w-5 h-5 text-gray-600 group-hover:text-red-600" />
+              </button>
+              <button
+                onClick={() => setSelectedSessionChat(null)}
+                className="p-2 hover:bg-gray-100 rounded-xl transition-colors"
+              >
+                <X className="w-6 h-6 text-gray-600" />
+              </button>
+            </div>
           </div>
+
+          {/* Delete Confirmation Dialog */}
+          {showDeleteConfirm === selectedSessionChat.id && (
+            <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-6 mb-6 shadow-md">
+              <h3 className="font-semibold text-red-900 mb-2">🗑️ Delete this chat session?</h3>
+              <p className="text-sm text-red-800 mb-4">
+                This action cannot be undone. All messages in this conversation will be permanently deleted.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={(e) => handleDeleteSession(selectedSessionChat.id, e)}
+                  disabled={deletingSessionId === selectedSessionChat.id}
+                  className="bg-red-600 text-white px-6 py-2 rounded-xl font-semibold hover:bg-red-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {deletingSessionId === selectedSessionChat.id ? 'Deleting...' : 'Yes, Delete'}
+                </button>
+                <button
+                  onClick={() => setShowDeleteConfirm(null)}
+                  className="bg-gray-200 text-gray-800 px-6 py-2 rounded-xl font-semibold hover:bg-gray-300 transition-all"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Messages */}
           {loadingChat ? (
@@ -291,7 +426,7 @@ export default function History({ moodHistory, setSelectedRecord, setShowRecordD
           <>
             {loadingSessions ? (
               <div className="text-center py-16">
-                <div className="animate-spin">
+                <div className="animate-spin inline-block">
                   <HistoryIcon className="w-12 h-12 text-indigo-600" />
                 </div>
                 <p className="text-gray-600 mt-4">Loading your chat sessions...</p>
@@ -308,10 +443,12 @@ export default function History({ moodHistory, setSelectedRecord, setShowRecordD
                 {sessions.map((session) => (
                   <div
                     key={session.id}
-                    className="bg-white border-2 border-gray-100 rounded-3xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-102 group cursor-pointer"
-                    onClick={() => openChatSession(session)}
+                    className="bg-white border-2 border-gray-100 rounded-3xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-102 group"
                   >
-                    <div className="flex items-center justify-between mb-4">
+                    <div 
+                      className="flex items-center justify-between mb-4 cursor-pointer"
+                      onClick={() => openChatSession(session)}
+                    >
                       <div className="flex items-center space-x-4">
                         <div className="bg-gradient-to-br from-indigo-100 to-purple-100 p-3 rounded-2xl group-hover:scale-110 transition-transform">
                           <MessageSquare className="w-6 h-6 text-indigo-600" />
@@ -325,6 +462,42 @@ export default function History({ moodHistory, setSelectedRecord, setShowRecordD
                         <div className="text-xs text-gray-600 font-semibold mb-1">Messages</div>
                         <div className="font-bold text-2xl bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">{session.message_count}</div>
                       </div>
+                    </div>
+                    
+                    {/* Delete Button */}
+                    <div className="mt-3 flex justify-end">
+                      {showDeleteConfirm === session.id ? (
+                        <div className="flex gap-2 items-center">
+                          <span className="text-sm text-gray-600 mr-2">Delete this chat?</span>
+                          <button
+                            onClick={(e) => handleDeleteSession(session.id, e)}
+                            disabled={deletingSessionId === session.id}
+                            className="bg-red-600 text-white px-4 py-2 rounded-xl font-semibold hover:bg-red-700 transition-all text-sm disabled:opacity-50"
+                          >
+                            {deletingSessionId === session.id ? 'Deleting...' : 'Confirm'}
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowDeleteConfirm(null);
+                            }}
+                            className="bg-gray-200 text-gray-800 px-4 py-2 rounded-xl font-semibold hover:bg-gray-300 transition-all text-sm"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowDeleteConfirm(session.id);
+                          }}
+                          className="flex items-center gap-2 text-red-600 hover:text-red-700 px-4 py-2 rounded-xl hover:bg-red-50 transition-all font-semibold text-sm"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          Delete Chat
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}

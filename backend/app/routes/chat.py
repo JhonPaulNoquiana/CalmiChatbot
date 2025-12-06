@@ -47,24 +47,15 @@ def send_message():
         db.session.add(user_message)
         db.session.commit()
         
-        # Get recent conversation context
-        recent_messages = Message.query.filter_by(
-            session_id=chat_session.id
-        ).order_by(Message.created_at.desc()).limit(10).all()
+        # UPDATED: Use session_id as user_id for conversation memory
+        # This ensures each chat session maintains its own conversation history
+        user_identifier = f"session_{chat_session.id}"
         
-        context = [
-            {
-                'role': 'user' if msg.sender == 'user' else 'model',
-                'content': msg.text
-            }
-            for msg in reversed(recent_messages)
-        ]
-        
-        # Generate AI response
+        # Generate AI response with conversation memory
         ai_response = gemini_service.generate_response(
-            message_text,
-            sentiment,
-            context
+            user_message=message_text,
+            sentiment=sentiment,
+            user_id=user_identifier  # <-- ADDED: Pass user_identifier for memory
         )
         
         # Save bot message
@@ -169,21 +160,51 @@ def get_sessions():
 
 
 @chat_bp.route('/session/<int:session_id>', methods=['DELETE'])
+@optional_token_required
 def delete_session(session_id):
-    """Delete a chat session"""
+    """Delete a chat session - SIMPLE FIX"""
     try:
         session = ChatSession.query.get(session_id)
         
         if not session:
             return {'error': 'Session not found'}, 404
         
-        # Delete all messages in the session (cascade handled by model)
+        current_user_id = getattr(request, 'user_id', None)
+        
+        # FIX: Convert to int for comparison
+        if current_user_id is not None:
+            current_user_id_int = int(current_user_id)
+        else:
+            current_user_id_int = None
+        
+        # Now compare integers
+        if current_user_id_int is not None:
+            if session.user_id == current_user_id_int:
+                # User owns session - allow
+                pass
+            elif session.user_id is None:
+                # Guest session - allow logged in user to delete
+                pass
+            else:
+                return {'error': 'Unauthorized to delete this session'}, 403
+        else:
+            # Not logged in
+            if session.user_id is not None:
+                return {'error': 'Login required to delete this session'}, 401
+        
+        # Clear conversation memory
+        user_identifier = f"session_{session.id}"
+        gemini_service.clear_history(user_identifier)
+        
+        # Delete the session
         db.session.delete(session)
         db.session.commit()
+        
+        print(f"✅ Session {session_id} deleted")
         
         return {'message': 'Session deleted successfully'}, 200
     
     except Exception as e:
         db.session.rollback()
-        print(f"Error deleting session: {e}")
+        print(f"❌ Error: {e}")
         return {'error': 'Failed to delete session', 'details': str(e)}, 500

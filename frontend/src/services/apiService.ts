@@ -279,3 +279,49 @@ export const getChatHistory = async (sessionId: number): Promise<any> => {
     throw error;
   }
 };
+// Add this function to your existing apiService.ts file
+
+// Replace the deleteSession function in apiService.ts
+export const deleteSession = async (sessionId: number): Promise<{ message: string }> => {
+  try {
+    const token = getAuthToken();
+    console.log('🗑️ Deleting session:', sessionId, 'with token:', token ? 'Present' : 'Missing');
+    
+    const response = await fetch(`${API_BASE_URL}/api/chat/session/${sessionId}`, {
+      method: 'DELETE',
+      headers: getHeaders(true),
+    });
+
+    console.log('🔵 Delete response status:', response.status);
+    
+    if (!response.ok) {
+      // Try to parse error response
+      let errorData;
+      try {
+        errorData = await response.json();
+      } catch {
+        errorData = { error: `HTTP error! status: ${response.status}` };
+      }
+      
+      // Throw an Error object with a message property
+      const errorMessage = typeof errorData === 'object' && errorData !== null && 'error' in errorData 
+        ? String(errorData.error)
+        : `Failed to delete session: ${response.status}`;
+      
+      throw new Error(errorMessage);
+    }
+
+    const data = await response.json();
+    console.log('✅ Delete successful:', data);
+    return data;
+  } catch (error) {
+    console.error('❌ Error in deleteSession:', error);
+    
+    // Re-throw as an Error object if it isn't already
+    if (error instanceof Error) {
+      throw error;
+    } else {
+      throw new Error(String(error));
+    }
+  }
+};

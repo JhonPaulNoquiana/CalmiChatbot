@@ -1,12 +1,16 @@
 import { 
   Heart, 
   Sparkles, 
-  Bot, 
-  Shield, 
+  Bot,  
   ChevronRight,
-  Brain,
-  Moon,
-  Target
+  MessageCircle,
+  Calendar,
+  History,
+  Lightbulb,
+  Clock,
+  TrendingUp,
+  Lock,
+  Zap
 } from 'lucide-react';
 
 interface LandingProps {
@@ -22,28 +26,52 @@ export default function Landing({
 }: LandingProps) {
   const features = [
     {
-      icon: <Brain className="w-6 h-6" />,
-      title: 'AI-Powered Support',
-      description: '24/7 empathetic conversations using advanced sentiment analysis',
+      icon: <MessageCircle className="w-6 h-6" />,
+      title: '24/7 AI Companion',
+      description: 'Talk anytime with Calmi, your empathetic AI that truly listens and remembers your conversations',
       color: 'from-indigo-500 to-purple-500'
     },
     {
-      icon: <Moon className="w-6 h-6" />,
-      title: 'Mood Tracking',
-      description: 'Monitor emotional patterns with intelligent mood check-ins',
+      icon: <Calendar className="w-6 h-6" />,
+      title: 'Mood Check-ins',
+      description: 'Track your emotional patterns daily and visualize your mental wellness journey over time',
       color: 'from-blue-500 to-cyan-500'
     },
     {
-      icon: <Target className="w-6 h-6" />,
-      title: 'Personalized Insights',
-      description: 'Get tailored recommendations based on your emotional journey',
+      icon: <History className="w-6 h-6" />,
+      title: 'Chat History',
+      description: 'Review past conversations and see your emotional growth (available for registered users)',
+      color: 'from-emerald-500 to-green-500'
+    },
+    {
+      icon: <Lightbulb className="w-6 h-6" />,
+      title: 'Daily Inspiration',
+      description: 'Receive uplifting quotes and wellness tips to brighten your day and boost your mood',
+      color: 'from-amber-500 to-orange-500'
+    },
+    {
+      icon: <Zap className="w-6 h-6" />,
+      title: 'Context-Aware AI',
+      description: 'Calmi remembers your previous messages within each session for more meaningful support',
       color: 'from-pink-500 to-rose-500'
     },
     {
-      icon: <Shield className="w-6 h-6" />,
+      icon: <Lock className="w-6 h-6" />,
       title: 'Private & Secure',
-      description: 'Your conversations are encrypted and completely confidential',
-      color: 'from-emerald-500 to-green-500'
+      description: 'Your conversations are encrypted and completely confidential. Your privacy matters to us',
+      color: 'from-violet-500 to-purple-500'
+    },
+    {
+      icon: <TrendingUp className="w-6 h-6" />,
+      title: 'Wellness Tips',
+      description: 'Get helpful wellness recommendations based on your current emotional state',
+      color: 'from-cyan-500 to-blue-500'
+    },
+    {
+      icon: <Clock className="w-6 h-6" />,
+      title: 'Crisis Resources',
+      description: 'Immediate access to professional crisis helplines when you need urgent support',
+      color: 'from-red-500 to-pink-500'
     }
   ];
 
@@ -150,7 +178,7 @@ export default function Landing({
               </span>
             </h2>
             <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-              Experience the future of mental wellness support with our comprehensive features
+              Everything you need for your mental wellness journey, all in one place
             </p>
           </div>
           
@@ -160,11 +188,11 @@ export default function Landing({
                 key={index}
                 className="bg-white rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 border border-gray-100"
               >
-                <div className={`bg-gradient-to-r ${feature.color} p-3 rounded-xl w-fit mb-6`}>
+                <div className={`bg-gradient-to-r ${feature.color} p-3 rounded-xl w-fit mb-6 text-white`}>
                   {feature.icon}
                 </div>
                 <h3 className="text-xl font-bold text-gray-900 mb-3">{feature.title}</h3>
-                <p className="text-gray-600">{feature.description}</p>
+                <p className="text-gray-600 leading-relaxed">{feature.description}</p>
               </div>
             ))}
           </div>
@@ -181,17 +209,17 @@ export default function Landing({
                 {
                   step: '01',
                   title: 'Share Your Feelings',
-                  description: 'Have natural conversations with our empathetic AI companion'
+                  description: 'Have natural conversations with our empathetic AI companion that remembers your story'
                 },
                 {
                   step: '02',
                   title: 'Track Your Mood',
-                  description: 'Use our mood tracker to visualize your emotional patterns'
+                  description: 'Check in regularly with mood tracking to monitor your emotional wellbeing over time'
                 },
                 {
                   step: '03',
-                  title: 'Gain Insights',
-                  description: 'Receive personalized insights and wellness recommendations'
+                  title: 'Get Support',
+                  description: 'Receive wellness tips and daily inspiration to support your mental health journey'
                 }
               ].map((step, index) => (
                 <div key={index} className="text-center">
@@ -215,7 +243,7 @@ export default function Landing({
             Start Your Wellness Journey Today
           </h2>
           <p className="text-xl text-white/90 mb-10 max-w-2xl mx-auto">
-            Experience emotional support anytime, anywhere
+            Experience emotional support anytime, anywhere. No credit card required.
           </p>
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
