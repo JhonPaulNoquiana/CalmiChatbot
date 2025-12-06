@@ -10,6 +10,7 @@ import Register from './pages/Register';
 import Landing from './pages/Landing';
 import ForgotPassword from './pages/ForgotPassword';
 import { sendChatMessage } from './services/apiService';
+import { submitMoodCheckIn as apiSubmitMoodCheckIn } from './services/apiService';
 
 function App() {
   const [showForgotPassword, setShowForgotPassword] = useState<boolean>(false);
@@ -168,25 +169,43 @@ function App() {
   };
 
   const submitMoodCheckIn = async (): Promise<void> => {
-    if (!currentMood) return;
+  if (!currentMood) return;
 
-    if (moodHistory.some((entry) => entry.sessionId === sessionId)) {
-      setMoodCheckError('One Mood Check In per chat');
-      setShowMoodCheckin(false);
-      return;
-    }
+  // Check if already checked in for this session
+  if (moodHistory.some((entry) => entry.sessionId === sessionId)) {
+    setMoodCheckError('One Mood Check In per chat');
+    setShowMoodCheckin(false);
+    return;
+  }
 
+  try {
+    const response = await apiSubmitMoodCheckIn(
+      sessionId,
+      currentMood,
+      moodIntensity,
+      moodNote
+    );
+
+    console.log('✅ Mood check-in saved to database:', response);
+
+    // Create local mood entry for immediate UI update
     const moodEntry: MoodEntry = {
-      id: Date.now(),
+      id: response.mood_entry.id,  // Use the ID from the database
       mood: currentMood,
       intensity: moodIntensity,
-      timestamp: new Date().toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      timestamp: new Date().toLocaleString([], { 
+        month: 'short', 
+        day: 'numeric', 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      }),
       note: moodNote,
       sessionId,
     };
 
     setMoodHistory((prev) => [moodEntry, ...prev]);
 
+    // Send confirmation bot message
     const botMessage: Message = {
       id: Date.now() + 1,
       text: `Thank you for checking in! I've recorded that you're feeling ${currentMood}. Remember, it's okay to feel this way. I'm here whenever you need support. 💙`,
@@ -197,13 +216,23 @@ function App() {
     };
 
     setMessages((prev) => [...prev, botMessage]);
+    
+    // Reset form
     setShowMoodCheckin(false);
     setCurrentMood('');
     setMoodNote('');
     setMoodIntensity(5);
     setActiveFeature('chat');
     setIsMobileSidebarOpen(false);
-  };
+    
+  } catch (error: any) {
+    console.error('Failed to save mood check-in:', error);
+    
+    // Show error to user
+    setMoodCheckError(error.message || 'Failed to save mood check-in. Please try again.');
+    setShowMoodCheckin(false);
+  }
+};
 
   const startNewChat = () => {
     const newSessionId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;

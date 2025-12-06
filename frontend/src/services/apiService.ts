@@ -123,27 +123,34 @@ export const submitMoodCheckIn = async (
   sessionId: string,
   mood: string,
   intensity: number,
-  note: string
+  note: string = '',
+  emotions: string[] = [],
+  tags: string[] = []
 ) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/mood`, {
+    console.log('📝 Submitting mood check-in:', { sessionId, mood, intensity, note });
+    
+    const response = await fetch(`${API_BASE_URL}/api/mood/check-in`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getHeaders(true),  //Include auth token if available
       body: JSON.stringify({
         session_id: sessionId,
         mood,
         intensity,
         note,
+        emotions,
+        tags
       }),
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const errorData = await response.json();
+      console.error('Mood check-in error:', errorData);
+      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
     }
 
     const data = await response.json();
+    console.log('✅ Mood check-in saved:', data);
     return data;
   } catch (error) {
     console.error('Error submitting mood check-in:', error);
@@ -151,7 +158,7 @@ export const submitMoodCheckIn = async (
   }
 };
 
-// ✅ AUTHENTICATION FUNCTIONS
+// AUTHENTICATION FUNCTIONS
 
 export const registerUser = async (email: string, password: string, fullName: string = ''): Promise<AuthResponse> => {
   try {
