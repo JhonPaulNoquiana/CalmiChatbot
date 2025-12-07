@@ -70,11 +70,12 @@ class Message(db.Model):
     __tablename__ = 'messages'
     
     id = db.Column(db.Integer, primary_key=True)
-    session_id = db.Column(db.Integer, db.ForeignKey('chat_sessions.id'), nullable=False, index=True)
+    # Add ondelete='CASCADE' here too
+    session_id = db.Column(db.Integer, db.ForeignKey('chat_sessions.id', ondelete='CASCADE'), nullable=False, index=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True, index=True)
-    sender = db.Column(db.String(50), nullable=False)  # 'user' or 'bot'
+    sender = db.Column(db.String(50), nullable=False)
     text = db.Column(db.Text, nullable=False)
-    sentiment = db.Column(db.String(50), nullable=True)  # 'positive', 'negative', 'neutral'
+    sentiment = db.Column(db.String(50), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
     
     def to_dict(self):
@@ -94,17 +95,17 @@ class MoodEntry(db.Model):
     """Mood entry model for tracking user moods"""
     __tablename__ = 'mood_entries'
     
-    # ✅ COMBINED: All 7 moods
-    VALID_MOODS = ['happy', 'sad', 'anxious', 'angry', 'lonely','stressed', 'tired', 'neutral']
+    VALID_MOODS = ['happy', 'sad', 'anxious', 'angry', 'lonely', 'stressed', 'tired', 'neutral']
     
     id = db.Column(db.Integer, primary_key=True)
-    session_id = db.Column(db.Integer, db.ForeignKey('chat_sessions.id'), nullable=False, index=True)
+    # Add ondelete='CASCADE' to ensure database-level cascade deletion
+    session_id = db.Column(db.Integer, db.ForeignKey('chat_sessions.id', ondelete='CASCADE'), nullable=False, index=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True, index=True)
-    mood = db.Column(db.String(50), nullable=False)  # one of VALID_MOODS
-    intensity = db.Column(db.Integer, nullable=False)  # 1-10 scale
+    mood = db.Column(db.String(50), nullable=False)
+    intensity = db.Column(db.Integer, nullable=False)
     note = db.Column(db.Text, nullable=True)
-    emotions = db.Column(db.String(500), nullable=True)  # comma-separated
-    tags = db.Column(db.String(500), nullable=True)  # comma-separated
+    emotions = db.Column(db.String(500), nullable=True)
+    tags = db.Column(db.String(500), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
     
     def to_dict(self):

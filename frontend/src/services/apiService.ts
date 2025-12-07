@@ -18,6 +18,34 @@ interface AuthResponse {
   };
 }
 
+// Unified Session Interfaces
+export interface UnifiedSession {
+  id: number;
+  session_id: string;
+  user_id: number | null;
+  is_guest: boolean;
+  started_at: string;
+  message_count: number;
+  mood_entry_count: number;
+  mood_entry: {
+    id: number;
+    mood: string;
+    intensity: number;
+    note: string;
+    emotions: string[];
+    tags: string[];
+    created_at: string;
+    session_id_string?: string;
+  } | null;
+  last_message_preview: string;
+}
+
+export interface UnifiedSessionsResponse {
+  sessions: UnifiedSession[];
+  count: number;
+}
+
+// Legacy interfaces (for backward compatibility)
 interface SessionData {
   id: number;
   session_id: string;
@@ -53,6 +81,7 @@ const getHeaders = (includeAuth: boolean = false) => {
   return headers;
 };
 
+// CHAT FUNCTIONS
 export const sendChatMessage = async (
   sessionId: string,
   message: string
@@ -66,7 +95,7 @@ export const sendChatMessage = async (
 
     const response = await fetch(`${API_BASE_URL}/api/chat/send`, {
       method: 'POST',
-      headers: getHeaders(true),  // ✅ Include auth token if available
+      headers: getHeaders(true),
       body: JSON.stringify({
         session_id: sessionId,
         message: message,
@@ -98,6 +127,94 @@ export const sendChatMessage = async (
   }
 };
 
+export const getChatHistory = async (sessionId: number): Promise<any> => {
+  try {
+    console.log('💬 Fetching chat history for session:', sessionId);
+    
+    const response = await fetch(`${API_BASE_URL}/api/chat/history/${sessionId}`, {
+      method: 'GET',
+      headers: getHeaders(true),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch history: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('❌ Error fetching chat history:', error);
+    throw error;
+  }
+};
+
+// UNIFIED SESSIONS FUNCTION (NEW)
+export const getUnifiedSessions = async (): Promise<UnifiedSessionsResponse> => {
+  try {
+    console.log('📚 Fetching unified sessions');
+    
+    const response = await fetch(`${API_BASE_URL}/api/chat/unified-sessions`, {
+      method: 'GET',
+      headers: getHeaders(true),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch unified sessions: ${response.status}`);
+    }
+
+    const data: UnifiedSessionsResponse = await response.json();
+    return data;
+  } catch (error) {
+    console.error('❌ Error fetching unified sessions:', error);
+    throw error;
+  }
+};
+
+// SESSION STATISTICS (NEW)
+export const getSessionStatistics = async (): Promise<any> => {
+  try {
+    console.log('📊 Fetching session statistics');
+    
+    const response = await fetch(`${API_BASE_URL}/api/chat/statistics`, {
+      method: 'GET',
+      headers: getHeaders(true),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch session statistics: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('❌ Error fetching session statistics:', error);
+    throw error;
+  }
+};
+
+// Legacy session function (kept for backward compatibility)
+export const getUserSessions = async (): Promise<SessionsResponse> => {
+  try {
+    console.log('📚 Fetching user chat sessions (legacy)');
+    
+    const response = await fetch(`${API_BASE_URL}/api/chat/sessions`, {
+      method: 'GET',
+      headers: getHeaders(true),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch sessions: ${response.status}`);
+    }
+
+    const data: SessionsResponse = await response.json();
+    return data;
+  } catch (error) {
+    console.error('❌ Error fetching sessions:', error);
+    throw error;
+  }
+};
+
+// MOOD FUNCTIONS
 export const getMoodHistory = async (sessionId: string) => {
   try {
     const response = await fetch(`${API_BASE_URL}/api/mood/${sessionId}`, {
@@ -132,7 +249,7 @@ export const submitMoodCheckIn = async (
     
     const response = await fetch(`${API_BASE_URL}/api/mood/check-in`, {
       method: 'POST',
-      headers: getHeaders(true),  //Include auth token if available
+      headers: getHeaders(true),
       body: JSON.stringify({
         session_id: sessionId,
         mood,
@@ -153,13 +270,34 @@ export const submitMoodCheckIn = async (
     console.log('✅ Mood check-in saved:', data);
     return data;
   } catch (error) {
-    console.error('Error submitting mood check-in:', error);
+    console.error('❌ Error submitting mood check-in:', error);
+    throw error;
+  }
+};
+
+export const getUserMoodHistory = async (): Promise<any> => {
+  try {
+    console.log('📊 Fetching user mood history');
+    
+    const response = await fetch(`${API_BASE_URL}/api/mood/user/history`, {
+      method: 'GET',
+      headers: getHeaders(true), 
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch mood history: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log('Mood history fetched:', data);
+    return data;
+  } catch (error) {
+    console.error('❌ Error fetching mood history:', error);
     throw error;
   }
 };
 
 // AUTHENTICATION FUNCTIONS
-
 export const registerUser = async (email: string, password: string, fullName: string = ''): Promise<AuthResponse> => {
   try {
     console.log('📝 Registering user:', email);
@@ -187,7 +325,7 @@ export const registerUser = async (email: string, password: string, fullName: st
     
     return data;
   } catch (error) {
-    console.error('Registration error:', error);
+    console.error('❌ Registration error:', error);
     throw error;
   }
 };
@@ -218,7 +356,7 @@ export const loginUser = async (email: string, password: string): Promise<AuthRe
     
     return data;
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('❌ Login error:', error);
     throw error;
   }
 };
@@ -245,85 +383,20 @@ export const logoutUser = (): void => {
   localStorage.removeItem('calmi_user');
 };
 
-export const getUserSessions = async (): Promise<SessionsResponse> => {
-  try {
-    console.log('📚 Fetching user chat sessions');
-    
-    const response = await fetch(`${API_BASE_URL}/api/chat/sessions`, {
-      method: 'GET',
-      headers: getHeaders(true),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch sessions: ${response.status}`);
-    }
-
-    const data: SessionsResponse = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error fetching sessions:', error);
-    throw error;
-  }
-};
-
-export const getChatHistory = async (sessionId: number): Promise<any> => {
-  try {
-    console.log('Fetching chat history for session:', sessionId);
-    
-    const response = await fetch(`${API_BASE_URL}/api/chat/history/${sessionId}`, {
-      method: 'GET',
-      headers: getHeaders(true),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch history: ${response.status}`);
-    }
-
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error fetching chat history:', error);
-    throw error;
-  }
-};
-
-export const getUserMoodHistory = async (): Promise<any> => {
-  try {
-    console.log('📊 Fetching user mood history');
-    
-    const response = await fetch(`${API_BASE_URL}/api/mood/user/history`, {
-      method: 'GET',
-      headers: getHeaders(true), 
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch mood history: ${response.status}`);
-    }
-
-    const data = await response.json();
-    console.log('Mood history fetched:', data);
-    return data;
-  } catch (error) {
-    console.error('Error fetching mood history:', error);
-    throw error;
-  }
-};
-
-// Replace the deleteSession function in apiService.ts
-export const deleteSession = async (sessionId: number): Promise<{ message: string }> => {
+// DELETE SESSION FUNCTION
+export const deleteSession = async (sessionId: number): Promise<{ success: boolean; message: string; session_id?: number }> => {
   try {
     const token = getAuthToken();
-    console.log('Deleting session:', sessionId, 'with token:', token ? 'Present' : 'Missing');
+    console.log('🗑️ Deleting session:', sessionId, 'with token:', token ? 'Present' : 'Missing');
     
     const response = await fetch(`${API_BASE_URL}/api/chat/session/${sessionId}`, {
       method: 'DELETE',
       headers: getHeaders(true),
     });
 
-    console.log('Delete response status:', response.status);
+    console.log('🔵 Delete response status:', response.status);
     
     if (!response.ok) {
-      // Try to parse error response
       let errorData;
       try {
         errorData = await response.json();
@@ -331,25 +404,46 @@ export const deleteSession = async (sessionId: number): Promise<{ message: strin
         errorData = { error: `HTTP error! status: ${response.status}` };
       }
       
-      // Throw an Error object with a message property
-      const errorMessage = typeof errorData === 'object' && errorData !== null && 'error' in errorData 
-        ? String(errorData.error)
-        : `Failed to delete session: ${response.status}`;
-      
+      const errorMessage = errorData?.error || `Failed to delete session: ${response.status}`;
       throw new Error(errorMessage);
     }
 
     const data = await response.json();
-    console.log('Delete successful:', data);
+    console.log('✅ Delete successful:', data);
+    
+    if (!data.success) {
+      throw new Error(data.error || 'Delete failed');
+    }
+    
     return data;
   } catch (error) {
-    console.error('Error in deleteSession:', error);
+    console.error('❌ Error in deleteSession:', error);
+    throw error;
+  }
+};
+
+// Optional: Add a create session function if needed
+export const createSession = async (sessionId: string): Promise<any> => {
+  try {
+    console.log('➕ Creating new session:', sessionId);
     
-    // Re-throw as an Error object if it isn't already
-    if (error instanceof Error) {
-      throw error;
-    } else {
-      throw new Error(String(error));
+    const response = await fetch(`${API_BASE_URL}/api/chat/session`, {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify({
+        session_id: sessionId,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to create session: ${response.status}`);
     }
+
+    const data = await response.json();
+    console.log('✅ Session created:', data);
+    return data;
+  } catch (error) {
+    console.error('❌ Error creating session:', error);
+    throw error;
   }
 };

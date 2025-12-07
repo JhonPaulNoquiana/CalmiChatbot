@@ -1,27 +1,28 @@
 import { useState, useEffect } from 'react';
-import type { MoodEntry, Message } from '../types';
-import { History as HistoryIcon, MessageSquare, X, Trash2 } from 'lucide-react';
-import { getUserSessions, getChatHistory, deleteSession } from '../services/apiService';
+import type { Message } from '../types';
+import { 
+  History as HistoryIcon, 
+  MessageSquare, 
+  X, 
+  Trash2, 
+  Calendar, 
+  BarChart,
+  Smile,
+  Clock
+} from 'lucide-react';
+import { 
+  getUnifiedSessions, 
+  getChatHistory, 
+  deleteSession, 
+  type UnifiedSession 
+} from '../services/apiService';
 
 interface HistoryProps {
-  moodHistory: MoodEntry[];
-  setSelectedRecord: (r: MoodEntry | null) => void;
-  setShowRecordDetail: (b: boolean) => void;
   getMoodEmoji: (mood: string) => string;
-  retrieveChatForSession?: (sessionId: string) => void;
   isAuthenticated?: boolean;
   isGuest?: boolean;
   onOpenPreviousChat?: (messages: Message[]) => void;
   onShowLogin?: () => void;
-}
-
-interface ChatSession {
-  id: number;
-  session_id: string;
-  user_id: number | null;  
-  is_guest: boolean;
-  started_at: string;
-  message_count: number;
 }
 
 interface ChatMessage {
@@ -34,58 +35,44 @@ interface ChatMessage {
   created_at: string;
 }
 
-export default function History({ moodHistory, setSelectedRecord, setShowRecordDetail, getMoodEmoji, retrieveChatForSession, isAuthenticated, isGuest, onOpenPreviousChat, onShowLogin }: HistoryProps) {
-  const [sessions, setSessions] = useState<ChatSession[]>([]);
+export default function History({ 
+  getMoodEmoji, 
+  isAuthenticated, 
+  isGuest, 
+  onOpenPreviousChat, 
+  onShowLogin 
+}: HistoryProps) {
+  const [sessions, setSessions] = useState<UnifiedSession[]>([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
-  const [activeTab, setActiveTab] = useState<'mood' | 'chats'>('mood');
   const [sessionMessages, setSessionMessages] = useState<Record<number, ChatMessage[]>>({});
-  const [selectedSessionChat, setSelectedSessionChat] = useState<ChatSession | null>(null);
+  const [selectedSessionChat, setSelectedSessionChat] = useState<UnifiedSession | null>(null);
   const [loadingChat, setLoadingChat] = useState(false);
   const [deletingSessionId, setDeletingSessionId] = useState<number | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<number | null>(null);
+  const [activeView, setActiveView] = useState<'sessions' | 'analytics'>('sessions');
 
-  // Load chat sessions for authenticated users
+  // Load unified sessions for authenticated users
   useEffect(() => {
     if (isAuthenticated && !isGuest) {
-      loadSessions();
+      loadUnifiedSessions();
     }
   }, [isAuthenticated, isGuest]);
 
-  const loadSessions = async () => {
-  try {
-    setLoadingSessions(true);
-    const data = await getUserSessions();
-    
-    console.log('=== LOADED SESSIONS DEBUG ===');
-    console.log('Total sessions:', data.sessions.length);
-    
-    // Get current user for comparison
-    const userStr = localStorage.getItem('calmi_user');
-    const user = userStr ? JSON.parse(userStr) : null;
-    
-    // Log each session's ownership info
-    data.sessions.forEach((session, index) => {
-      const ownsSession = user && session.user_id === user.id;
-      console.log(`Session ${index + 1}:`, {
-        id: session.id,
-        user_id: session.user_id,
-        is_guest: session.is_guest,
-        session_id: session.session_id,
-        started_at: session.started_at,
-        'Current user owns this': ownsSession ? '✅ YES' : '❌ NO'
-      });
-    });
-    
-    setSessions(data.sessions);
-  } catch (error) {
-    console.error('Failed to load sessions:', error);
-  } finally {
-    setLoadingSessions(false);
-  }
-};
+  const loadUnifiedSessions = async () => {
+    try {
+      setLoadingSessions(true);
+      const data = await getUnifiedSessions();
+      console.log('📊 Loaded unified sessions:', data.sessions.length);
+      setSessions(data.sessions);
+    } catch (error) {
+      console.error('Failed to load unified sessions:', error);
+    } finally {
+      setLoadingSessions(false);
+    }
+  };
 
   const loadSessionMessages = async (sessionId: number) => {
-    if (sessionMessages[sessionId]) return; // Already loaded
+    if (sessionMessages[sessionId]) return;
     try {
       setLoadingChat(true);
       const data = await getChatHistory(sessionId);
@@ -101,81 +88,42 @@ export default function History({ moodHistory, setSelectedRecord, setShowRecordD
   };
 
   const handleDeleteSession = async (sessionId: number, e: React.MouseEvent) => {
-  e.stopPropagation();
-  try {
-    setDeletingSessionId(sessionId);
-    
-    // Get current user info
-    const userStr = localStorage.getItem('calmi_user');
-    const user = userStr ? JSON.parse(userStr) : null;
-    const token = localStorage.getItem('calmi_token');
-    
-    console.log('=== DELETE SESSION DEBUG ===');
-    console.log('👤 Current user:', user);
-    console.log('👤 Current user ID:', user?.id);
-    console.log('🔑 Token exists:', !!token);
-    console.log('🗑️ Deleting session ID:', sessionId);
-    
-    // Find session details
-    const sessionToDelete = sessions.find(s => s.id === sessionId);
-    if (sessionToDelete) {
-      console.log('📋 Session details:', {
-        session_id: sessionToDelete.session_id,
-        user_id: sessionToDelete.user_id,  // Now this will work
-        is_guest: sessionToDelete.is_guest,
-        started_at: sessionToDelete.started_at,
-        message_count: sessionToDelete.message_count
+    e.stopPropagation();
+    try {
+      setDeletingSessionId(sessionId);
+      console.log('🗑️ Deleting session:', sessionId);
+      
+      await deleteSession(sessionId);
+      
+      console.log('✅ Delete successful');
+      
+      // Remove from local state
+      setSessions(prev => prev.filter(s => s.id !== sessionId));
+      
+      // Remove from messages cache
+      setSessionMessages(prev => {
+        const newMessages = { ...prev };
+        delete newMessages[sessionId];
+        return newMessages;
       });
       
-      // Check if the current user owns this session
-      const ownsSession = user && sessionToDelete.user_id === user.id;
-      console.log('🔍 Ownership check:', {
-        'Current user ID': user?.id,
-        'Session user ID': sessionToDelete.user_id,
-        'User owns session': ownsSession
-      });
+      // Close confirmation dialog
+      setShowDeleteConfirm(null);
+      
+      // If this was the selected session, close it
+      if (selectedSessionChat?.id === sessionId) {
+        setSelectedSessionChat(null);
+      }
+      
+    } catch (error) {
+      console.error('❌ Failed to delete session:', error);
+      alert(`Failed to delete chat session: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setDeletingSessionId(null);
     }
-    
-    await deleteSession(sessionId);
-    
-    console.log('✅ Delete successful');
-    
-    // Remove from local state
-    setSessions(prev => prev.filter(s => s.id !== sessionId));
-    
-    // Remove from messages cache
-    setSessionMessages(prev => {
-      const newMessages = { ...prev };
-      delete newMessages[sessionId];
-      return newMessages;
-    });
-    
-    // Close confirmation dialog
-    setShowDeleteConfirm(null);
-    
-    // If this was the selected session, close it
-    if (selectedSessionChat?.id === sessionId) {
-      setSelectedSessionChat(null);
-    }
-    
-  } catch (error) {
-    console.error('❌ Failed to delete session:', error);
-    
-    // Show more detailed error
-    if (error instanceof Error) {
-      console.log('Error details:', {
-        message: error.message,
-        name: error.name
-      });
-    }
-    
-    alert(`Failed to delete chat session: ${error instanceof Error ? error.message : 'Unknown error'}`);
-  } finally {
-    setDeletingSessionId(null);
-  }
-};
+  };
 
-  const openChatSession = async (session: ChatSession) => {
+  const openChatSession = async (session: UnifiedSession) => {
     setSelectedSessionChat(session);
     if (!sessionMessages[session.id]) {
       await loadSessionMessages(session.id);
@@ -184,20 +132,91 @@ export default function History({ moodHistory, setSelectedRecord, setShowRecordD
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleString([], { 
+      month: 'short', 
+      day: 'numeric', 
+      year: 'numeric',
+      hour: '2-digit', 
+      minute: '2-digit' 
+    });
+  };
+
+  const getMoodColor = (mood: string | undefined) => {
+    if (!mood) return 'from-gray-100 to-slate-100';
+    
+    const moodColors: Record<string, string> = {
+      'happy': 'from-yellow-100 to-orange-100',
+      'sad': 'from-blue-100 to-indigo-100',
+      'anxious': 'from-purple-100 to-pink-100',
+      'calm': 'from-green-100 to-teal-100',
+      'angry': 'from-red-100 to-orange-100',
+      'neutral': 'from-gray-100 to-slate-100',
+      'confused': 'from-amber-100 to-yellow-100',
+      'tired': 'from-indigo-100 to-purple-100',
+      'stressed': 'from-red-100 to-orange-100',
+      'lonely': 'from-blue-100 to-indigo-100',
+    };
+    return moodColors[mood] || 'from-gray-100 to-slate-100';
+  };
+
+  // Calculate mood statistics for analytics view
+  const moodStatistics = () => {
+    const stats = {
+      totalSessions: sessions.length,
+      sessionsWithMood: sessions.filter(s => s.mood_entry).length,
+      moodDistribution: {} as Record<string, number>,
+      averageIntensity: 0,
+    };
+    
+    let totalIntensity = 0;
+    let moodCount = 0;
+    
+    sessions.forEach(session => {
+      if (session.mood_entry) {
+        const mood = session.mood_entry.mood;
+        stats.moodDistribution[mood] = (stats.moodDistribution[mood] || 0) + 1;
+        totalIntensity += session.mood_entry.intensity;
+        moodCount++;
+      }
+    });
+    
+    stats.averageIntensity = moodCount > 0 ? Math.round((totalIntensity / moodCount) * 10) / 10 : 0;
+    
+    return stats;
   };
 
   // If viewing a chat session, show the full conversation
   if (selectedSessionChat) {
     const messages = sessionMessages[selectedSessionChat.id] || [];
+    const stats = moodStatistics();
+    
     return (
       <div className="flex-1 p-8 overflow-y-auto flex flex-col">
         <div className="max-w-3xl mx-auto w-full flex-1">
           {/* Header */}
           <div className="flex items-center justify-between mb-6 bg-white rounded-2xl p-4 shadow-md sticky top-0">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-800">Chat Session</h2>
-              <p className="text-sm text-gray-500">{formatDate(selectedSessionChat.started_at)}</p>
+            <div className="flex-1">
+              <div className="flex items-center gap-3 mb-2">
+                <h2 className="text-2xl font-bold text-gray-800">Chat Session</h2>
+                {selectedSessionChat.mood_entry && (
+                  <div className={`px-3 py-1 rounded-full bg-gradient-to-r ${getMoodColor(selectedSessionChat.mood_entry.mood)}`}>
+                    <span className="font-medium text-sm capitalize flex items-center gap-1">
+                      <Smile className="w-4 h-4" />
+                      {selectedSessionChat.mood_entry.mood} ({selectedSessionChat.mood_entry.intensity}/10)
+                    </span>
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-4 text-sm text-gray-500">
+                <div className="flex items-center gap-1">
+                  <Calendar className="w-4 h-4" />
+                  {formatDate(selectedSessionChat.started_at)}
+                </div>
+                <div className="flex items-center gap-1">
+                  <MessageSquare className="w-4 h-4" />
+                  {selectedSessionChat.message_count} messages
+                </div>
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -223,7 +242,7 @@ export default function History({ moodHistory, setSelectedRecord, setShowRecordD
             <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-6 mb-6 shadow-md">
               <h3 className="font-semibold text-red-900 mb-2">🗑️ Delete this chat session?</h3>
               <p className="text-sm text-red-800 mb-4">
-                This action cannot be undone. All messages in this conversation will be permanently deleted.
+                This action cannot be undone. All messages and mood check-ins in this conversation will be permanently deleted.
               </p>
               <div className="flex gap-3">
                 <button
@@ -239,6 +258,33 @@ export default function History({ moodHistory, setSelectedRecord, setShowRecordD
                 >
                   Cancel
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* Mood Details (if exists) */}
+          {selectedSessionChat.mood_entry && (
+            <div className="mb-6 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl p-5 border border-indigo-100">
+              <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                <Smile className="w-5 h-5" />
+                Mood Check-in Details
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="text-4xl">{getMoodEmoji(selectedSessionChat.mood_entry.mood)}</div>
+                  <div>
+                    <div className="font-bold text-xl capitalize">{selectedSessionChat.mood_entry.mood}</div>
+                    <div className="text-sm text-gray-600">Intensity: {selectedSessionChat.mood_entry.intensity}/10</div>
+                  </div>
+                </div>
+                {selectedSessionChat.mood_entry.note && (
+                  <div className="md:col-span-2">
+                    <div className="text-sm text-gray-600 mb-1">Notes:</div>
+                    <div className="text-gray-800 bg-white/50 p-3 rounded-xl">
+                      {selectedSessionChat.mood_entry.note}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -270,7 +316,10 @@ export default function History({ moodHistory, setSelectedRecord, setShowRecordD
                     }`}
                   >
                     <p className="text-sm">{msg.text}</p>
-                    <p className="text-xs mt-2 opacity-70">{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                    <p className="text-xs mt-2 opacity-70 flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </p>
                   </div>
                 </div>
               ))}
@@ -281,7 +330,6 @@ export default function History({ moodHistory, setSelectedRecord, setShowRecordD
           <div className="mt-6 flex gap-3">
             <button
               onClick={() => {
-                // Convert to Message format for App.tsx
                 const formattedMessages: Message[] = messages.map(msg => ({
                   id: msg.id,
                   text: msg.text,
@@ -301,7 +349,7 @@ export default function History({ moodHistory, setSelectedRecord, setShowRecordD
               onClick={() => setSelectedSessionChat(null)}
               className="flex-1 bg-gray-100 text-indigo-600 py-3 rounded-2xl font-semibold hover:bg-gray-200 transition-all duration-300 hover:scale-105"
             >
-              Back
+              Back to History
             </button>
           </div>
         </div>
@@ -309,6 +357,7 @@ export default function History({ moodHistory, setSelectedRecord, setShowRecordD
     );
   }
 
+  // Main History View
   return (
     <div className="flex-1 p-8 overflow-y-auto">
       <div className="max-w-3xl mx-auto">
@@ -336,139 +385,116 @@ export default function History({ moodHistory, setSelectedRecord, setShowRecordD
           </div>
         )}
 
-        {/* Tabs for authenticated users */}
+        {/* View Toggle for authenticated users */}
         {isAuthenticated && !isGuest && (
           <div className="flex gap-4 mb-8 border-b-2 border-gray-200">
             <button
-              onClick={() => setActiveTab('mood')}
-              className={`py-3 px-6 font-semibold transition-all ${
-                activeTab === 'mood'
+              onClick={() => setActiveView('sessions')}
+              className={`py-3 px-6 font-semibold transition-all flex items-center gap-2 ${
+                activeView === 'sessions'
                   ? 'text-indigo-600 border-b-2 border-indigo-600'
                   : 'text-gray-600 hover:text-indigo-600'
               }`}
             >
-              Mood Check-ins ({moodHistory.length})
+              <Calendar className="w-4 h-4" />
+              Wellness Sessions ({sessions.length})
             </button>
             <button
-              onClick={() => setActiveTab('chats')}
-              className={`py-3 px-6 font-semibold transition-all ${
-                activeTab === 'chats'
+              onClick={() => setActiveView('analytics')}
+              className={`py-3 px-6 font-semibold transition-all flex items-center gap-2 ${
+                activeView === 'analytics'
                   ? 'text-indigo-600 border-b-2 border-indigo-600'
                   : 'text-gray-600 hover:text-indigo-600'
               }`}
             >
-              Chat Sessions ({sessions.length})
+              <BarChart className="w-4 h-4" />
+              Analytics
             </button>
           </div>
         )}
 
-        {/* Mood History Tab */}
-        {activeTab === 'mood' && (
-          <>
-            {moodHistory.length === 0 ? (
-              <div className="text-center py-16">
-                <div className="bg-gradient-to-br from-indigo-100 to-purple-100 p-6 rounded-3xl inline-block mb-6 shadow-lg">
-                  <HistoryIcon className="w-16 h-16 text-indigo-600" />
-                </div>
-                <p className="text-gray-600 text-lg">No mood check-ins yet. Start tracking your wellness!</p>
-              </div>
-            ) : (
-              <div className="space-y-5">
-                {moodHistory.map((entry) => (
-                  <div
-                    key={entry.id}
-                    className="bg-white border-2 border-gray-100 rounded-3xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-102 group"
-                  >
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center space-x-4">
-                        <div className="text-5xl transform group-hover:scale-110 transition-transform duration-300">{getMoodEmoji(entry.mood)}</div>
-                        <div>
-                          <div className="font-bold text-xl text-gray-800 capitalize">{entry.mood}</div>
-                          <div className="text-sm text-gray-500 font-medium">{entry.timestamp}</div>
-                        </div>
-                      </div>
-                      <div className="text-right bg-gradient-to-br from-indigo-50 to-purple-50 px-5 py-3 rounded-2xl">
-                        <div className="text-xs text-gray-600 font-semibold mb-1">Intensity</div>
-                        <div className="font-bold text-2xl bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">{entry.intensity}/10</div>
-                      </div>
-                    </div>
-                    {entry.note && (
-                      <div className="text-sm text-gray-700 bg-gradient-to-br from-gray-50 to-gray-100 p-4 rounded-2xl border border-gray-200">{entry.note}</div>
-                    )}
-                    <div className="mt-3 flex gap-2">
-                      {retrieveChatForSession && !isGuest && (
-                        <button
-                          className="bg-gradient-to-r from-indigo-500 to-purple-500 text-white px-4 py-2 rounded-2xl font-semibold hover:shadow-lg transition-all duration-300 hover:scale-105"
-                          onClick={() => retrieveChatForSession(entry.sessionId)}
-                        >
-                          Retrieve Chat
-                        </button>
-                      )}
-                      <button
-                        className="bg-gray-100 text-indigo-600 px-4 py-2 rounded-2xl font-semibold hover:bg-gray-200 transition-all duration-300 hover:scale-105"
-                        onClick={() => {
-                          setSelectedRecord(entry);
-                          setShowRecordDetail(true);
-                        }}
-                      >
-                        Details
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
-        )}
-
-        {/* Chat Sessions Tab */}
-        {activeTab === 'chats' && (
+        {/* Sessions View */}
+        {activeView === 'sessions' && (
           <>
             {loadingSessions ? (
               <div className="text-center py-16">
                 <div className="animate-spin inline-block">
                   <HistoryIcon className="w-12 h-12 text-indigo-600" />
                 </div>
-                <p className="text-gray-600 mt-4">Loading your chat sessions...</p>
+                <p className="text-gray-600 mt-4">Loading your wellness sessions...</p>
               </div>
             ) : sessions.length === 0 ? (
               <div className="text-center py-16">
                 <div className="bg-gradient-to-br from-indigo-100 to-purple-100 p-6 rounded-3xl inline-block mb-6 shadow-lg">
                   <MessageSquare className="w-16 h-16 text-indigo-600" />
                 </div>
-                <p className="text-gray-600 text-lg">No previous chat sessions. Start a new conversation!</p>
+                <p className="text-gray-600 text-lg">No previous wellness sessions. Start a new conversation!</p>
               </div>
             ) : (
               <div className="space-y-5">
                 {sessions.map((session) => (
                   <div
                     key={session.id}
-                    className="bg-white border-2 border-gray-100 rounded-3xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-102 group"
+                    className="bg-white border-2 border-gray-100 rounded-3xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-102 group cursor-pointer"
+                    onClick={() => openChatSession(session)}
                   >
-                    <div 
-                      className="flex items-center justify-between mb-4 cursor-pointer"
-                      onClick={() => openChatSession(session)}
-                    >
-                      <div className="flex items-center space-x-4">
-                        <div className="bg-gradient-to-br from-indigo-100 to-purple-100 p-3 rounded-2xl group-hover:scale-110 transition-transform">
-                          <MessageSquare className="w-6 h-6 text-indigo-600" />
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex items-start space-x-4 flex-1">
+                        <div className={`bg-gradient-to-br ${getMoodColor(session.mood_entry?.mood)} p-3 rounded-2xl group-hover:scale-110 transition-transform`}>
+                          {session.mood_entry ? (
+                            <span className="text-2xl block">{getMoodEmoji(session.mood_entry.mood)}</span>
+                          ) : (
+                            <MessageSquare className="w-6 h-6 text-indigo-600" />
+                          )}
                         </div>
-                        <div>
-                          <div className="font-bold text-lg text-gray-800 group-hover:text-indigo-600 transition-colors">Chat Session</div>
-                          <div className="text-sm text-gray-500 font-medium">{formatDate(session.started_at)}</div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h3 className="font-bold text-lg text-gray-800 group-hover:text-indigo-600 transition-colors">
+                              {session.mood_entry 
+                                ? `Wellness Session - ${session.mood_entry.mood.charAt(0).toUpperCase() + session.mood_entry.mood.slice(1)}`
+                                : 'Chat Session'
+                              }
+                            </h3>
+                            {session.mood_entry && (
+                              <span className="text-sm font-semibold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
+                                {session.mood_entry.intensity}/10
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-sm text-gray-500 font-medium flex items-center gap-2">
+                            <Calendar className="w-4 h-4" />
+                            {formatDate(session.started_at)}
+                          </div>
+                          {session.mood_entry?.note && (
+                            <p className="text-sm text-gray-600 mt-2 line-clamp-2">
+                              "{session.mood_entry.note}"
+                            </p>
+                          )}
+                          <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
+                            <span className="flex items-center gap-1">
+                              <MessageSquare className="w-3 h-3" />
+                              {session.message_count} messages
+                            </span>
+                            <span>•</span>
+                            <span className="truncate max-w-xs">
+                              Last: {session.last_message_preview}
+                            </span>
+                          </div>
                         </div>
                       </div>
-                      <div className="text-right bg-gradient-to-br from-indigo-50 to-purple-50 px-5 py-3 rounded-2xl">
+                      <div className="text-right">
                         <div className="text-xs text-gray-600 font-semibold mb-1">Messages</div>
-                        <div className="font-bold text-2xl bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">{session.message_count}</div>
+                        <div className="font-bold text-2xl bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                          {session.message_count}
+                        </div>
                       </div>
                     </div>
                     
                     {/* Delete Button */}
-                    <div className="mt-3 flex justify-end">
+                    <div className="mt-3 flex justify-end" onClick={(e) => e.stopPropagation()}>
                       {showDeleteConfirm === session.id ? (
                         <div className="flex gap-2 items-center">
-                          <span className="text-sm text-gray-600 mr-2">Delete this chat?</span>
+                          <span className="text-sm text-gray-600 mr-2">Delete this session?</span>
                           <button
                             onClick={(e) => handleDeleteSession(session.id, e)}
                             disabled={deletingSessionId === session.id}
@@ -495,7 +521,7 @@ export default function History({ moodHistory, setSelectedRecord, setShowRecordD
                           className="flex items-center gap-2 text-red-600 hover:text-red-700 px-4 py-2 rounded-xl hover:bg-red-50 transition-all font-semibold text-sm"
                         >
                           <Trash2 className="w-4 h-4" />
-                          Delete Chat
+                          Delete Session
                         </button>
                       )}
                     </div>
@@ -504,6 +530,91 @@ export default function History({ moodHistory, setSelectedRecord, setShowRecordD
               </div>
             )}
           </>
+        )}
+
+        {/* Analytics View */}
+        {activeView === 'analytics' && (
+          <div className="space-y-6">
+            {/* Overview Stats */}
+            <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-3xl p-6 shadow-lg">
+              <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <BarChart className="w-5 h-5" />
+                Your Wellness Overview
+              </h3>
+              
+              {(() => {
+                const stats = moodStatistics();
+                return (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-white rounded-2xl p-4 text-center shadow-sm">
+                      <div className="text-3xl font-bold text-indigo-600">{stats.totalSessions}</div>
+                      <div className="text-sm text-gray-600">Total Sessions</div>
+                    </div>
+                    <div className="bg-white rounded-2xl p-4 text-center shadow-sm">
+                      <div className="text-3xl font-bold text-purple-600">{stats.sessionsWithMood}</div>
+                      <div className="text-sm text-gray-600">Mood Check-ins</div>
+                    </div>
+                    <div className="bg-white rounded-2xl p-4 text-center shadow-sm">
+                      <div className="text-3xl font-bold text-pink-600">{stats.averageIntensity}</div>
+                      <div className="text-sm text-gray-600">Avg. Intensity</div>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Mood Distribution */}
+            {(() => {
+              const stats = moodStatistics();
+              if (Object.keys(stats.moodDistribution).length > 0) {
+                return (
+                  <div className="bg-white rounded-3xl p-6 shadow-lg">
+                    <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                      <Smile className="w-5 h-5" />
+                      Mood Distribution
+                    </h3>
+                    <div className="space-y-4">
+                      {Object.entries(stats.moodDistribution)
+                        .sort((a, b) => b[1] - a[1])
+                        .map(([mood, count]) => {
+                          const percentage = (count / stats.sessionsWithMood) * 100;
+                          return (
+                            <div key={mood} className="flex items-center">
+                              <div className="w-32 flex items-center gap-3">
+                                <span className="text-2xl">{getMoodEmoji(mood)}</span>
+                                <div>
+                                  <div className="font-medium capitalize">{mood}</div>
+                                  <div className="text-xs text-gray-500">{count} session{count !== 1 ? 's' : ''}</div>
+                                </div>
+                              </div>
+                              <div className="flex-1 ml-4">
+                                <div className="h-4 rounded-full overflow-hidden bg-gray-100">
+                                  <div 
+                                    className={`h-full rounded-full bg-gradient-to-r ${getMoodColor(mood)}`}
+                                    style={{ width: `${percentage}%` }}
+                                  />
+                                </div>
+                              </div>
+                              <div className="ml-4 w-16 text-right font-semibold text-gray-700">
+                                {percentage.toFixed(1)}%
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </div>
+                );
+              } else {
+                return (
+                  <div className="text-center py-12 bg-white rounded-3xl shadow-lg">
+                    <BarChart className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-600 mb-2">No mood data available yet.</p>
+                    <p className="text-sm text-gray-500">Start checking in your mood during chat sessions!</p>
+                  </div>
+                );
+              }
+            })()}
+          </div>
         )}
       </div>
     </div>
