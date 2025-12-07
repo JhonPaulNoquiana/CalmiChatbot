@@ -738,11 +738,7 @@ const getMoodSentiment = (mood: string): 'positive' | 'neutral' | 'negative' => 
 
           {activeFeature === 'history' && (
             <History
-              moodHistory={moodHistory}
-              setSelectedRecord={setSelectedRecord}
-              setShowRecordDetail={setShowRecordDetail}
               getMoodEmoji={getMoodEmoji}
-              retrieveChatForSession={retrieveChatForSession}
               isAuthenticated={isAuthenticated}
               isGuest={isGuest}
               onOpenPreviousChat={handleOpenPreviousChat}
