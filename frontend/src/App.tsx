@@ -44,7 +44,7 @@ function App() {
   const [moodNote, setMoodNote] = useState<string>('');
   const [moodHistory, setMoodHistory] = useState<MoodEntry[]>([]);
   const [showMoodCheckin, setShowMoodCheckin] = useState<boolean>(false);
-  const [selectedRecord, setSelectedRecord] = useState<MoodEntry | null>(null);
+  const [selectedRecord] = useState<MoodEntry | null>(null);
   const [showRecordDetail, setShowRecordDetail] = useState<boolean>(false);
   const [moodCheckError, setMoodCheckError] = useState<string>('');
 

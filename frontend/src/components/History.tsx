@@ -188,8 +188,7 @@ export default function History({
   // If viewing a chat session, show the full conversation
   if (selectedSessionChat) {
     const messages = sessionMessages[selectedSessionChat.id] || [];
-    const stats = moodStatistics();
-    
+
     return (
       <div className="flex-1 p-8 overflow-y-auto flex flex-col">
         <div className="max-w-3xl mx-auto w-full flex-1">
@@ -220,7 +219,7 @@ export default function History({
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={(e) => {
+                onClick={() => {
                   setShowDeleteConfirm(selectedSessionChat.id);
                 }}
                 className="p-2 hover:bg-red-50 rounded-xl transition-colors group"
