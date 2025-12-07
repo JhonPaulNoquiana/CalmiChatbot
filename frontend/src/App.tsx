@@ -742,7 +742,23 @@ const getMoodSentiment = (mood: string): 'positive' | 'neutral' | 'negative' => 
               isAuthenticated={isAuthenticated}
               isGuest={isGuest}
               onOpenPreviousChat={handleOpenPreviousChat}
-              onShowLogin={() => setShowLoginPage(true)}
+              onShowLogin={() => {
+                
+                // Logout guest first
+                localStorage.removeItem('calmi_token');
+                localStorage.removeItem('calmi_user');
+                localStorage.removeItem('calmi_guest');
+                localStorage.removeItem('calmi_session');
+                
+                // Reset states
+                setIsAuthenticated(false);
+                setIsGuest(false);
+                setUserName("");
+                setMessages([]);
+                
+                // Show login page
+                setShowLoginPage(true);
+              }}
             />
           )}
         </div>
