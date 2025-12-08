@@ -1,4 +1,3 @@
-// frontend/src/App.tsx
 import React, { useState, useRef, useEffect } from 'react';
 import { Heart, Sparkles, Bot, Smile, Wind, History as HistoryIcon, Menu, X } from 'lucide-react';
 import type { Message, MoodEntry } from './types';
