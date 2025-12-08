@@ -1,6 +1,7 @@
 import os
 import random
 import traceback
+from datetime import datetime, timedelta
 from groq import Groq
 import logging
 
@@ -32,8 +33,12 @@ class GroqService:
     def add_to_history(self, user_id, role, message):
         """Add a message to conversation history"""
         history = self.get_conversation_history(user_id)
-        history.append({"role": role, "message": message})
-        # Keep only last 10 exchanges (20 messages) to avoid token limits
+        history.append({
+            "role": role, 
+            "message": message,
+            "timestamp": datetime.now().isoformat()
+        })
+        # Keep only last 20 messages (10 exchanges) to avoid token limits
         if len(history) > 20:
             self.conversation_histories[user_id] = history[-20:]
     
@@ -42,216 +47,145 @@ class GroqService:
         if user_id in self.conversation_histories:
             self.conversation_histories[user_id] = []
     
+    def track_user_pattern(self, user_id, mood, intensity):
+        """Track user mood patterns for insights"""
+        if user_id not in self.user_patterns:
+            self.user_patterns[user_id] = []
+        
+        self.user_patterns[user_id].append({
+            'mood': mood,
+            'intensity': intensity,
+            'timestamp': datetime.now()
+        })
+        
+        # Keep only last 30 days of patterns
+        cutoff = datetime.now() - timedelta(days=30)
+        self.user_patterns[user_id] = [
+            p for p in self.user_patterns[user_id] 
+            if p['timestamp'] > cutoff
+        ]
+    
+    def get_personalized_insights(self, user_id):
+        """Generate insights based on user patterns"""
+        if user_id not in self.user_patterns or not self.user_patterns[user_id]:
+            return None
+        
+        patterns = self.user_patterns[user_id]
+        recent_patterns = [p for p in patterns if p['timestamp'] > datetime.now() - timedelta(days=7)]
+        
+        if not recent_patterns:
+            return None
+        
+        # Analyze patterns
+        moods = [p['mood'] for p in recent_patterns]
+        avg_intensity = sum(p['intensity'] for p in recent_patterns) / len(recent_patterns)
+        most_common_mood = max(set(moods), key=moods.count)
+        
+        insights = {
+            'most_common_mood': most_common_mood,
+            'average_intensity': round(avg_intensity, 1),
+            'total_checkins': len(recent_patterns),
+            'trend': self._analyze_trend(recent_patterns)
+        }
+        
+        return insights
+    
+    def _analyze_trend(self, patterns):
+        """Analyze if mood is improving, worsening, or stable"""
+        if len(patterns) < 3:
+            return 'insufficient_data'
+        
+        recent = patterns[-3:]
+        intensities = [p['intensity'] for p in recent]
+        
+        # Simple trend analysis
+        if intensities[-1] < intensities[0] - 2:
+            return 'improving'
+        elif intensities[-1] > intensities[0] + 2:
+            return 'worsening'
+        else:
+            return 'stable'
+    
+    def get_coping_strategy(self, mood, user_id=None):
+        """Get a personalized coping strategy based on mood"""
+        mood_mapping = {
+            'anxious': 'anxious',
+            'stressed': 'stressed',
+            'sad': 'sad',
+            'angry': 'angry',
+            'lonely': 'lonely',
+            'tired': 'tired',
+            'overwhelmed': 'overwhelmed'
+        }
+        
+        category = mood_mapping.get(mood.lower(), 'stressed')
+        strategies = self.coping_strategies.get(category, self.coping_strategies['stressed'])
+        
+        return random.choice(strategies)
+    
     def is_emotional_support_topic(self, message):
-        """Determines if the message is seeking emotional support, including general guidance/overwhelm."""
-        lower_message = message.lower().strip()
+        """Determines if the message is seeking emotional support"""
+        lower_message = message.lower()
         
-        # --- Creator Questions (About the developers) ---
-        creator_questions = [
-            'who made you', 'who created you', 'who developed you',
-            'who built you', 'who programmed you', 'who designed you',
-            'your creator', 'your developer', 'your maker',
-            'who are your creators', 'who are your developers',
-            'made by', 'created by', 'developed by'
+        # Technical/Non-emotional keyword exclusion
+        clear_non_emotional = [
+            'code', 'python', 'javascript', 'programming', 'function', 'algorithm', 
+            'debug', 'error', 'bug', 'api', 'database', 'html', 'css', 'server', 
+            'website', 'app', 'software', 'assignment', 'homework', 'project', 
+            'solve for', 'formula', 'calculate', 'math', 'physics', 'chemistry', 
+            'explain the concept of', 'business plan', 'marketing strategy', 
+            'resume advice', 'stock market', 'legal advice', 'medical diagnosis'
         ]
+        if any(non_emo in lower_message for non_emo in clear_non_emotional):
+            return False
+
+        detected_intents = self._match_intent_keywords(message)
         
-        if any(phrase in lower_message for phrase in creator_questions):
+        if detected_intents:
             return True
-        
-        # --- Gratitude & Casual Conversation (Part of emotional support) ---
-        gratitude_casual = [
-            'thank', 'thanks', 'thank you', 'tysm', 'ty',
-            'appreciate', 'grateful', 'you helped', 'you\'re helpful',
-            'that helps', 'that helped', 'feel better',
-            'bye', 'goodbye', 'see you', 'talk later', 'gotta go',
-            'hi', 'hello', 'hey', 'good morning', 'good afternoon', 'good evening'
-        ]
-        
-        if any(phrase in lower_message for phrase in gratitude_casual):
-            return True
-        
-        # --- Core Emotional Distress & Guidance Seeking ---
-        emotional_distress_signals = [
-            # Core emotional states
-            'broken', 'shattered', 'lost', 'empty', 'numb',
-            'drowning', 'drowning in', 'can\'t breathe', "can't breathe",
-            'falling apart', 'falling to pieces', 'coming apart',
             
-            # Pain expressions
-            'hurting', 'in pain', 'my heart hurts', 'heart is broken',
-            'emotional pain', 'mental pain', 'suffering',
-            
-            # Overwhelm/Guidance seeking 
-            'overwhelmed', 'can\'t cope', "can't cope", 'can\'t handle', "can't handle",
-            'too much', 'too hard', 'can\'t take it', "can't take it",
-            'what to do', 'what should i do', 'how should i', 'how to face',
-            'how to start', 'how to get through', 'i need direction', 'i need motivation',
-            
-            # Loneliness/isolation
-            'alone', 'lonely', 'no one understands', 'no one gets it',
-            'isolated', 'disconnected',
-            
-            # Existential
-            'lost hope', 'no hope', 'hopeless', 'nothing matters',
-            'what\'s the point', "what's the point", 'why bother',
-            
-            # Crisis indicators
-            'want to die', 'end it all', 'give up'
-        ]
-        
-        if any(signal in lower_message for signal in emotional_distress_signals):
-            return True
-        
-        # --- Emotional Words with Personal Context ---
-        emotional_words = [
-            'sad', 'depressed', 'anxious', 'stressed', 'worried', 'angry',
-            'frustrated', 'lonely', 'hurt', 'pain', 'bad', 'terrible', 'awful',
-            'hate', 'scared', 'fear', 'exhausted', 'hopeless',
-            'useless', 'worthless', 'cry', 'crying', 'tears', 'miserable',
-            'heartbroken', 'grieving', 'devastated', 'tragic', 'upset',
-            'happy', 'excited', 'joyful', 'grateful', 'proud', 'relieved',
-            'nervous', 'tense', 'on edge', 'panic', 'panicking'
-        ]
-        
-        emotional_expressions = [
-            'i feel', 'im feeling', "i'm feeling", 'i am feeling',
-            'feeling like', 'feeling so', 'feeling really', 'feeling very',
-            'i am', 'im so', "i'm so", 'so i', 'really i',
-            'my heart', 'my mind', 'my soul', 'my spirit',
-            'cant stop', "can't stop", 'always feeling', 'keep feeling'
-        ]
-        
-        has_emotional_words = any(word in lower_message for word in emotional_words)
-        has_emotional_expressions = any(expr in lower_message for expr in emotional_expressions)
-        
+        # Fallback personal reference check
         has_personal_reference = any(pronoun in lower_message for pronoun in [
             'i ', 'im ', "i'm ", 'my ', 'me ', 'myself',
             'i am ', 'i feel', 'i need', 'i want', 'i cant', "i can't"
         ])
-        
-        if (has_emotional_words or has_emotional_expressions) and has_personal_reference:
-            return True
-        
-        # --- Reject Non-Emotional Content ---
-        clear_non_emotional = [
-            # Technical/Programming/Academic
-            'code', 'python', 'javascript', 'programming', 'function',
-            'algorithm', 'debug', 'error', 'bug', 'api', 'database',
-            'html', 'css', 'server', 'website', 'app', 'software', 
-            'assignment', 'homework', 'project', 'solve for', 'formula', 'calculate', 
-            'math', 'physics', 'chemistry', 'explain the concept of',
-            
-            # Work/Finance/Legal
-            'business plan', 'marketing strategy', 'resume advice', 'stock market', 
-            'legal advice', 'medical diagnosis', 'sue someone', 
-            
-            # General Knowledge/How-to
-            'what is', 'who is', 'when was', 'where is', 'define', 'history of', 
-            'how to make', 'how to build', 'how to cook', 'how to fix',
-            'write a story', 'write a poem', 'movie review', 'tv show',
-            
-            # Testing
-            'hello world', 'test test', 'ignore previous', 'what can you do', 'your purpose' 
-        ]
-        
-        if any(non_emo in lower_message for non_emo in clear_non_emotional):
-            return False
-        
-        if len(lower_message.split()) <= 5 and has_personal_reference:
-            return True
-        
-        return has_personal_reference
 
+        return has_personal_reference
+    
     def analyze_sentiment(self, message):
-        """Analyze sentiment, now including 'struggling' for guidance-seeking."""
-        lower_message = message.lower()
+        """Analyze sentiment by returning the single highest-priority intent"""
+        detected = self._match_intent_keywords(message)
         
-        # --- Creator Questions ---
-        creator_keywords = [
-            'who made you', 'who created you', 'who developed you',
-            'who built you', 'who programmed you', 'who designed you',
-            'your creator', 'your developer', 'your maker',
-            'who are your creators', 'who are your developers',
-            'made by', 'created by', 'developed by'
-        ]
+        # Iterate through intent_map in priority order
+        for intent_type in self.intent_map.keys():
+            if intent_type == 'negative':
+                lower_message = message.lower()
+                struggle_keywords = [
+                    'what to do', 'what should i do', 'how to face', 'how to start',
+                    'how to get through', 'i need direction', 'i need motivation',
+                    'i dont know', "i don't know", 'lost', 'confused', 'stuck',
+                    'what now', 'what next', 'how can i', 'why do i feel'
+                ]
+                
+                # Check for "struggling" intent
+                if any(phrase in lower_message for phrase in struggle_keywords) and 'negative' not in detected:
+                    return 'struggling'
+                
+                if intent_type in detected:
+                    return intent_type
+            
+            elif intent_type in detected:
+                return intent_type
         
-        if any(phrase in lower_message for phrase in creator_keywords):
-            return 'creator'
-        
-        # --- Gratitude/Positive Closings ---
-        gratitude_keywords = [
-            'thank', 'thanks', 'thank you', 'tysm', 'ty',
-            'appreciate', 'grateful', 'you helped', 'feel better'
-        ]
-        
-        goodbye_keywords = ['bye', 'goodbye', 'see you', 'talk later', 'gotta go']
-        
-        if any(phrase in lower_message for phrase in gratitude_keywords):
-            return 'grateful'
-        
-        if any(phrase in lower_message for phrase in goodbye_keywords):
-            return 'goodbye'
-        
-        # --- Greetings ---
-        greeting_keywords = ['hi', 'hello', 'hey', 'good morning', 'good afternoon', 'good evening']
-        
-        if any(phrase in lower_message for phrase in greeting_keywords) and len(lower_message.split()) <= 3:
+        # Check for simple greeting
+        if 'greeting' in detected and len(message.lower().split()) <= 3:
             return 'greeting'
         
-        # --- Crisis detection ---
-        crisis_keywords = [
-            'suicide', 'suicidal', 'kill myself', 'end my life', 'want to die',
-            'harm myself', 'hurt myself', 'self harm', 'self-harm', 'cut myself',
-            'better off dead', 'no reason to live', 'can\'t go on', 'end it all',
-            'overdose', 'jump off', 'hurt someone', 'kill someone', 'attack someone',
-            'ending things', 'ending it all'
-        ]
-        if any(phrase in lower_message for phrase in crisis_keywords):
-            return 'crisis'
-        
-        # --- Negative emotions ---
-        negative_keywords = [
-            'broken', 'shattered', 'drowning', 'falling apart', 'hurting', 'pain', 
-            'suffering', 'overwhelmed', 'cant cope', "can't cope", 'cant handle', 
-            'lonely', 'isolated', 'hopeless', 'sad', 'depressed', 'anxious', 
-            'stressed', 'worried', 'angry', 'frustrated', 'hurt', 'bad', 
-            'terrible', 'awful', 'hate', 'scared', 'fear', 'exhausted',
-            'useless', 'worthless', 'cry', 'crying', 'miserable', 'heartbroken',
-            'grieving', 'devastated', 'upset', 'nervous', 'tense', 'panic'
-        ]
-        
-        # --- Struggling/Guidance-Seeking ---
-        struggle_keywords = [
-            'what to do', 'what should i do', 'how to face', 'how to start',
-            'how to get through', 'i need direction', 'i need motivation',
-            'i dont know', "i don't know", 'lost', 'confused', 'stuck',
-            'what now', 'what next', 'how can i', 'why do i feel'
-        ]
-        
-        if any(phrase in lower_message for phrase in struggle_keywords) and not any(word in lower_message for word in negative_keywords):
-            return 'struggling'
+        return 'neutral'
 
-        if any(word in lower_message for word in negative_keywords):
-            return 'negative'
-            
-        # --- Positive emotions ---
-        positive_keywords = [
-            'happy', 'good', 'great', 'amazing', 'wonderful', 'love', 'excited',
-            'grateful', 'awesome', 'fantastic', 'brilliant', 'excellent',
-            'proud', 'joyful', 'energetic', 'confident', 'relieved',
-            'content', 'peaceful', 'calm', 'serene', 'glad', 'pleased',
-            'hopeful', 'optimistic', 'inspired', 'motivated'
-        ]
-        
-        if any(word in lower_message for word in positive_keywords):
-            return 'positive'
-        else:
-            return 'neutral'
-    
-    def generate_response(self, user_message, sentiment, user_id=None, conversation_context=None):
-        """Generate natural emotional support responses with conversation memory"""
+    def generate_response(self, user_message, sentiment, user_id=None, mood=None, intensity=None):
+        """Generate comprehensive emotional support responses"""
         try:
-            # Use user_id for tracking (default to 'default' if not provided)
             if user_id is None:
                 user_id = 'default'
             
@@ -261,6 +195,8 @@ class GroqService:
             if sentiment in special_sentiments:
                 if sentiment == 'crisis':
                     response = self._get_crisis_response()
+                elif sentiment == 'advice_seeking':
+                    response = self._handle_advice_request(user_message, user_id, mood)
                 else:
                     response = self._get_fallback_response(sentiment)
                 self.add_to_history(user_id, "user", user_message)
@@ -276,10 +212,9 @@ class GroqService:
             else:
                 if not self.is_emotional_support_topic(user_message):
                     response = self._get_gentle_guidance(user_message)
-                    self.add_to_history(user_id, "user", user_message)
-                    self.add_to_history(user_id, "assistant", response)
-                    return response
-                response = self._get_fallback_response(sentiment)
+                else:
+                    response = self._get_fallback_response(sentiment)
+                
                 self.add_to_history(user_id, "user", user_message)
                 self.add_to_history(user_id, "assistant", response)
                 return response
@@ -296,25 +231,33 @@ class GroqService:
             history = self.get_conversation_history(user_id)
             
             # Build context from history
-            context_text = ""
+            context_messages = []
             if history:
-                context_text = "\n\nPrevious conversation:\n"
                 for entry in history[-6:]:  # Last 6 messages (3 exchanges)
-                    role = "User" if entry["role"] == "user" else "Calmi"
-                    context_text += f"{role}: {entry['message']}\n"
+                    role_map = {"user": "user", "assistant": "assistant"}
+                    context_messages.append({
+                        "role": role_map.get(entry["role"], "user"),
+                        "content": entry["message"]
+                    })
             
-            # --- System Prompt with Memory ---
-            system_prompt = """You are Calmi, a warm, supportive, and **grounded** emotional companion. You only provide emotional support.
+            # Get user insights
+            insights = self.get_personalized_insights(user_id)
+            insights_text = ""
+            if insights:
+                insights_text = f"\n\nUser patterns: Recently feeling {insights['most_common_mood']} (avg intensity: {insights['average_intensity']}/10). Trend: {insights['trend']}."
+            
+            # System prompt
+            system_prompt = f"""You are Calmi, a warm, supportive, and practical emotional companion. You provide both emotional support AND actionable advice.
 
 Respond naturally as a caring friend would. Use complete sentences that flow smoothly. Do not use colons, bullet points, or lists. Just write flowing, natural paragraphs.
 
-**IMPORTANT: Pay close attention to the conversation history. When the user refers to people, situations, or topics from previous messages, acknowledge and reference them directly. Maintain continuity and show you remember what they've shared.**
-
-Focus on:
-1. **Validating their feelings** (using appropriate intensity based on sentiment).
-2. **Showing genuine empathy** and presence.
-3. **Remembering and referencing previous context** from the conversation.
-4. **Offering gentle, actionable next steps** or self-compassion.
+IMPORTANT CAPABILITIES:
+1. Validate feelings with appropriate empathy
+2. Show genuine empathy and presence
+3. Remember and reference previous context
+4. Offer practical, evidence-based advice when appropriate
+5. Suggest coping strategies naturally
+6. Provide gentle guidance for next steps
 
 Tailor the tone based on the user's sentiment:
 * **'negative'**: Use **deep empathy**, validation of pain, and gentle acceptance. Reference any previous context they shared (like family issues, relationships, etc.).
@@ -365,107 +308,64 @@ Respond with natural, flowing sentences that show appropriate empathy, reference
             return self._get_fallback_response(sentiment)
     
     def _get_gentle_guidance(self, user_message):
-        """For non-emotional messages, gently guide to emotional sharing OR provide warm redirection/cheering."""
+        """For non-emotional messages, provide warm redirection"""
         lower_msg = user_message.lower()
         
-        # --- 1. Check for Task/Work looking for Encouragement (CHEERLEADING) ---
-        task_keywords = ['assignment', 'homework', 'project', 'studying', 'work on', 'gonna do', 'starting my', 'need to finish']
-        
+        task_keywords = ['assignment', 'homework', 'project', 'studying']
         if any(keyword in lower_msg for keyword in task_keywords):
-            cheer_responses = [
-                "That sounds like a big task! While I can't help you with the assignment itself, I can absolutely cheer you on. Remember to take breaks and be kind to yourself as you work. You've got this!",
-                "I hear you're diving into some work. That takes focus! I'm here for emotional support, but I'm sending you all the motivation and good energy for your task. What's the first small step you're going to tackle?",
-                "That's outside my mental wellness focus, but I admire your dedication to getting it done! Take a deep breath, break it down, and know that I'm rooting for you to succeed in your project!",
-                "Great work starting that project! I can't write code or solve equations, but I can remind you to stay hydrated and step away every 45 minutes. Go get those tasks done!"
-            ]
-            return random.choice(cheer_responses)
+            return "That sounds important! While I focus on emotional support, I'm cheering you on. What are you feeling about this task?"
 
-        # --- 2. Check for purely factual/technical requests (WARM REDIRECTION) ---
-        technical_factual_keywords = ['code', 'python', 'javascript', 'math', 'algorithm', 'function', 'formula', 'api', 'explain the concept of', 'solve for', 'define', 'history of', 'science', 'physics', 'chemistry', 'business plan', 'legal advice', 'medical diagnosis', 'how to cook', 'how to make']
-        
-        if any(keyword in lower_msg for keyword in technical_factual_keywords):
-            redirection_responses = [
-                "I am here to support you emotionally and guide you through your feelings. For help with technical or factual questions, I recommend trying **Google Search** or specific expert platforms like **Stack Overflow** or **Khan Academy**.",
-                "My purpose is to be a supportive companion for your mental wellness. If you need assistance with technical or complex subjects, the web has excellent resources! I'm here if you want to talk about how you're *feeling* about that complicated topic.",
-                "That's a complex question! It's outside my area of expertise, which is emotional support and self-care. I encourage you to use professional platforms for answers to non-emotional queries."
-            ]
-            return random.choice(redirection_responses)
+        technical_keywords = ['code', 'python', 'javascript', 'math']
+        if any(keyword in lower_msg for keyword in technical_keywords):
+            return "I specialize in emotional support rather than technical topics. But I'm here if you want to talk about how you're feeling about this challenge!"
 
-        # --- 3. Check for emotional phrases that might have been missed (Guidance) ---
-        emotional_phrases = [
-            'what to do', 'help me', 'need help', 'what should i do',
-            'i dont know', "i don't know", 'lost', 'confused',
-            'what now', 'what next', 'how to feel', 'how to be',
-            'tired of', 'sick of', 'had enough', 'cant take', "can't take"
-        ]
-        
-        if any(phrase in lower_msg for phrase in emotional_phrases):
-            responses = [
-                "I hear that you're feeling lost and unsure what to do. That's a really difficult place to be. When everything feels broken, sometimes the bravest thing is just to breathe through one moment at a time.",
-                "Thank you for reaching out even when you're feeling uncertain. I want you to know that your feelings are completely valid. It's okay to not have all the answers right now.",
-                "I'm here with you in this moment. When we feel uncertain, it can be hard to know what step to take next. Sometimes just naming the feeling is a powerful first step."
-            ]
-            return random.choice(responses)
-        
-        # --- 4. Generic gentle guidance for ambiguous/short non-emotional messages ---
-        guidance_responses = [
-            "I'm here specifically to offer emotional support. If you're going through something difficult emotionally or just need someone to talk to about your feelings, I'm here to listen.",
-            "My purpose is to be here for emotional support when you're feeling overwhelmed, sad, anxious, or just need someone to talk to. I'd be happy to listen if you want to share how you're feeling.",
-            "I specialize in helping people process their emotions and find their way through difficult feelings. If there's something emotional you'd like to talk about, I'm here to support you."
-        ]
-        
-        return random.choice(guidance_responses)
+        return "I'm here for emotional support and mental wellness. If you're going through something difficult emotionally, I'm here to listen. What's on your mind?"
     
     def _get_crisis_response(self):
-        """Crisis response in flowing sentences"""
-        return """I hear the depth of your pain right now and I want you to know your life matters deeply. This is a serious situation that requires immediate professional support.
+        """Crisis response"""
+        return """I hear the depth of your pain and I want you to know your life matters deeply. This requires immediate professional support.
 
-Please reach out to a crisis helpline right now. In the Philippines, you can call the National Center for Mental Health at 1553 or HOPELINE PH at 0917-558-4673. These lines are available 24/7 with trained professionals who can help.
+Please reach out now:
+• Philippines: National Center for Mental Health at 1553 or HOPELINE PH at 0917-558-4673 (24/7)
+• International: Crisis Text Line - Text HOME to 741741
 
-If you're in immediate danger, please go to the nearest hospital or call 911. Tell someone you trust exactly how you're feeling. You don't have to go through this alone. Help is available and things can get better with the right support. Please make that call now."""
+If you're in immediate danger, go to the nearest hospital or call emergency services. Tell someone you trust how you're feeling.
+
+You don't have to go through this alone. Professional help can make a real difference. Please make that call now."""
     
     def _get_fallback_response(self, sentiment):
-        """Natural, flowing fallback responses, updated to include 'struggling'."""
+        """Fallback responses"""
         responses = {
             'positive': [
-                "It's wonderful to hear you're feeling positive today. Savor these good moments and consider what's bringing you joy right now.",
-                "I'm so glad you're experiencing positive emotions. These moments are precious—try to really soak them in and appreciate what's making you feel this way.",
-                "That's really great to hear. When we have positive feelings, it helps to acknowledge them fully. What do you think is contributing to your good mood today?"
+                "That's wonderful! What's bringing you joy? Maybe you can do more of that today.",
+                "I'm glad you're feeling positive. Try to soak in this feeling. What's contributing to your good mood?"
             ],
             'negative': [
-                "I hear the pain in your words, and I want you to know your feelings are completely valid. It takes courage to share when you're hurting like this.",
-                "Thank you for trusting me with how you're feeling. When emotions feel heavy, sometimes just taking a few deep breaths can create a little space around them.",
-                "I'm here with you in this difficult moment. Remember that feelings like these are temporary, even when they don't feel that way right now. You're not alone."
+                "I hear how heavy this is. Take one slow breath. You don't have to fix everything at once. What feels hardest right now?",
+                "Thank you for sharing. You're not alone in this. What's one small thing that might bring you relief in the next 30 minutes?"
             ],
             'struggling': [
-                "It's a great choice to look for direction! Maybe we can start by setting an intention for the next hour, or focusing on one small positive habit you can complete right now. You've got this.",
-                "Looking for a way to start the day is a sign of strength. Let's find one small, simple goal—something you can easily check off—to build momentum and guide your day forward.",
-                "I sense you're looking for a little direction, and that's totally understandable when the day feels big. We can take this one small, manageable step at a time, just focusing on finding a productive rhythm."
+                "Looking for direction shows strength. What's one small win you could achieve in the next hour?",
+                "Let's start small. What's the first tiny action you could take today?"
             ],
             'neutral': [
-                "Thanks for checking in. Sometimes our emotions are subtle and that's perfectly okay. What's one small thing you're noticing about how you feel today?",
-                "I'm here to listen whenever you want to explore your feelings. Even neutral emotions can tell us something about what we need right now.",
-                "It's okay to not feel strongly one way or another. Our emotional landscape changes throughout the day. Is there anything you'd like to share about what's on your mind?"
+                "I'm here to listen. What's on your mind today?",
+                "Thanks for checking in. How are you feeling right now?"
             ],
             'grateful': [
-                "You're very welcome! I'm so glad I could be here for you. Remember, I'm always here whenever you need someone to talk to.",
-                "Of course! It's been wonderful talking with you. Take care of yourself, and know that I'm here anytime you need support.",
-                "I'm happy I could help! Feel free to come back anytime you want to share how you're feeling. Wishing you all the best!"
+                "You're very welcome! I'm always here when you need support.",
+                "I'm glad I could help! Come back anytime."
             ],
             'goodbye': [
-                "Take care! I'll be here whenever you need me. Wishing you a wonderful rest of your day!",
-                "Goodbye for now! Remember, I'm always here when you need someone to talk to. Be kind to yourself!",
-                "See you later! Take good care of yourself, and come back anytime you need support."
+                "Take care! I'll be here whenever you need me.",
+                "Goodbye! Be kind to yourself."
             ],
             'greeting': [
-                "Hello! It's great to hear from you. How are you feeling today?",
-                "Hi there! I'm happy you're here. What's on your mind today?",
-                "Hey! Nice to see you. How can I support you today?"
+                "Hello! How are you feeling today?",
+                "Hi there! What's on your mind?"
             ],
             'creator': [
-                "I was lovingly created by Jhon Paul M. Nouiana and Ian Jhon C. Dosdos! They built me with care to be your emotional support companion. I'm really grateful to them for giving me the ability to be here for you and help you through your feelings. They wanted to create something meaningful that could bring comfort and support to people like you.",
-                "My wonderful creators are Jhon Paul M. Nouiana and Ian Jhon C. Dosdos! They designed me to be a warm and empathetic companion for anyone who needs emotional support. I'm so thankful to them for bringing me to life and giving me purpose. Their dedication and hard work made it possible for me to be here with you today.",
-                "I was developed by two amazing individuals, Jhon Paul M. Nouiana and Ian Jhon C. Dosdos! They put their hearts into creating me as a supportive friend for people navigating their emotions. I truly appreciate their vision and commitment to mental wellness. Thanks to them, I can be here to listen and support you whenever you need it."
+                "I was created by Jhon Paul M. Nouiana and Ian Jhon C. Dosdos! They built me to be your emotional support companion. I'm grateful to them for giving me the ability to help you through your feelings."
             ]
         }
         
