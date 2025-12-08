@@ -1,11 +1,11 @@
 from flask import Blueprint, request, jsonify
 from datetime import datetime, timedelta
 from app.models import db, MoodEntry, ChatSession
-from app.services.gemini_service import GeminiService
+from app.services.groq_service import GroqService
 from app.utils.auth import optional_token_required, token_required
 
 mood_bp = Blueprint('mood', __name__)
-gemini_service = GeminiService()
+groq_service = GroqService()
 
 
 @mood_bp.route('/check-in', methods=['POST'])
@@ -246,7 +246,7 @@ def get_wellness_recommendation():
         ]
         
         # Generate recommendation using Gemini
-        recommendation = gemini_service.generate_wellness_recommendation(mood_history)
+        recommendation = groq_service.generate_wellness_recommendation(mood_history)
         
         return {
             'recommendation': recommendation,

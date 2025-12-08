@@ -1,11 +1,11 @@
 from flask import Blueprint, request, jsonify
 from datetime import datetime
 from app.models import db, Message, ChatSession, MoodEntry  # Added MoodEntry import
-from app.services.gemini_service import GeminiService
+from app.services.groq_service import GroqService
 from app.utils.auth import optional_token_required
 
 chat_bp = Blueprint('chat', __name__)
-gemini_service = GeminiService()
+groq_service = GroqService()
 
 
 @chat_bp.route('/send', methods=['POST'])
@@ -36,7 +36,7 @@ def send_message():
             db.session.commit()
         
         # Save user message
-        sentiment = gemini_service.analyze_sentiment(message_text)
+        sentiment = groq_service.analyze_sentiment(message_text)
         user_message = Message(
             session_id=chat_session.id,
             user_id=request.user_id,
@@ -52,7 +52,7 @@ def send_message():
         user_identifier = f"session_{chat_session.id}"
         
         # Generate AI response with conversation memory
-        ai_response = gemini_service.generate_response(
+        ai_response = groq_service.generate_response(
             user_message=message_text,
             sentiment=sentiment,
             user_id=user_identifier  # <-- ADDED: Pass user_identifier for memory
@@ -270,7 +270,7 @@ def delete_session(session_id):
         
         # Clear conversation memory
         user_identifier = f"session_{session.id}"
-        gemini_service.clear_history(user_identifier)
+        groq_service.clear_history(user_identifier)
         
         # Delete the session (cascade delete will handle messages and mood entries)
         db.session.delete(session)

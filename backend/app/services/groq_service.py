@@ -1,18 +1,26 @@
-import google.generativeai as genai
 import os
 import random
 import traceback
+from groq import Groq
+import logging
+
+# Set up logging
+logger = logging.getLogger(__name__)
 
 
-class GeminiService:
-    """Service for Gemini AI integration for emotional support ONLY"""
+class GroqService:
+    """Service for Groq Cloud AI integration for emotional support ONLY"""
     
-    def __init__(self, api_key=None):
-        self.api_key = api_key or os.getenv('GEMINI_API_KEY', '')
+    def __init__(self, api_key=None, model=None):
+        self.api_key = api_key or os.getenv('GROQ_API_KEY', '')
+        self.model = model or os.getenv('GROQ_MODEL', 'llama-3.3-70b-versatile')
+        
         if self.api_key:
-            genai.configure(api_key=self.api_key)
-        self.model = genai.GenerativeModel('gemini-2.0-flash')
-        # NEW: Store conversation history per user
+            self.client = Groq(api_key=self.api_key)
+        else:
+            self.client = None
+            
+        # Store conversation history per user
         self.conversation_histories = {}
     
     def get_conversation_history(self, user_id):
@@ -247,7 +255,7 @@ class GeminiService:
             if user_id is None:
                 user_id = 'default'
             
-            # Handle special sentiments with predefined responses (skip Gemini API)
+            # Handle special sentiments with predefined responses (skip Groq API)
             special_sentiments = ['crisis', 'creator', 'grateful', 'goodbye', 'greeting']
             
             if sentiment in special_sentiments:
@@ -259,9 +267,9 @@ class GeminiService:
                 self.add_to_history(user_id, "assistant", response)
                 return response
             
-            # For emotional support topics, use Gemini API
-            if self.api_key and self.is_emotional_support_topic(user_message):
-                response = self._generate_gemini_response(user_message, sentiment, user_id)
+            # For emotional support topics, use Groq API
+            if self.client and self.is_emotional_support_topic(user_message):
+                response = self._generate_groq_response(user_message, sentiment, user_id)
                 self.add_to_history(user_id, "user", user_message)
                 self.add_to_history(user_id, "assistant", response)
                 return response
@@ -277,12 +285,12 @@ class GeminiService:
                 return response
         
         except Exception as e:
-            print(f"Error: {e}")
+            logger.error(f"Error generating response: {e}")
             response = self._get_fallback_response(sentiment)
             return response
     
-    def _generate_gemini_response(self, user_message, sentiment, user_id):
-        """Generate response using Gemini with conversation context"""
+    def _generate_groq_response(self, user_message, sentiment, user_id):
+        """Generate response using Groq with conversation context"""
         try:
             # Get conversation history
             history = self.get_conversation_history(user_id)
@@ -313,31 +321,38 @@ Tailor the tone based on the user's sentiment:
 * **'struggling'**: Use a **motivational, directional, and high-agency tone**. Acknowledge they are seeking a **starting point or positive perspective**. Focus on small, manageable actions, building positive habits, or choosing a focus for the hour/day. **Do not use overly dramatic language, apologize, or assume the user is sad/overwhelmed if they ask for direction.** Keep the tone light, encouraging, and respectful of their ability to cope.
 * **'positive'**: Acknowledge and encourage savoring the good mood.
 
-No advice about non-emotional topics. Always be a friend, never a therapist."""
-
-            prompt = f"""{system_prompt}
-{context_text}
-The user's current sentiment is **'{sentiment}'**.
-They say: "{user_message}"
+No advice about non-emotional topics. Always be a friend, never a therapist.
 
 Respond with natural, flowing sentences that show appropriate empathy, reference previous conversation context when relevant, and offer real, grounded emotional support. No colons, no lists, just warm, compassionate conversation."""
 
-            response = self.model.generate_content(
-                prompt,
-                generation_config=genai.types.GenerationConfig(
-                    max_output_tokens=200,  # Increased for more contextual responses
-                    temperature=0.75,
-                ),
-                safety_settings=[
-                    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
-                ]
+            # Build messages for Groq API
+            messages = [
+                {"role": "system", "content": system_prompt},
+            ]
+            
+            # Add conversation history
+            if history:
+                for entry in history[-6:]:  # Last 6 messages
+                    role = "user" if entry["role"] == "user" else "assistant"
+                    messages.append({"role": role, "content": entry["message"]})
+            
+            # Add current user message with sentiment context
+            current_message = f"The user's current sentiment is **'{sentiment}'**.\nThey say: \"{user_message}\""
+            messages.append({"role": "user", "content": current_message})
+            
+            # Call Groq API
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                max_tokens=300,  # Increased for more contextual responses
+                temperature=0.75,
+                top_p=0.95,
+                frequency_penalty=0.1,
+                presence_penalty=0.1
             )
             
-            if response.text:
-                text = response.text.strip()
+            if response.choices and response.choices[0].message.content:
+                text = response.choices[0].message.content.strip()
                 text = text.replace(':', '.').replace('•', '').replace('-', '')
                 if not text.endswith(('.', '!', '?')):
                     text = text + '.'
@@ -346,7 +361,7 @@ Respond with natural, flowing sentences that show appropriate empathy, reference
             return self._get_fallback_response(sentiment)
             
         except Exception as e:
-            print(f"Gemini error: {e}")
+            logger.error(f"Groq API error: {e}")
             return self._get_fallback_response(sentiment)
     
     def _get_gentle_guidance(self, user_message):
@@ -474,4 +489,5 @@ If you're in immediate danger, please go to the nearest hospital or call 911. Te
             return recommendations.get(latest_mood, "Take a moment to check in with how you're feeling today. Your emotional wellbeing matters.")
         
         except Exception as e:
+            logger.error(f"Error generating wellness recommendation: {e}")
             return "Be kind to yourself today. Your emotional wellbeing matters."
