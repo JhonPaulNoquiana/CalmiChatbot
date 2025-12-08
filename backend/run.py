@@ -16,4 +16,4 @@ if __name__ == '__main__':
  CORS Origin: {os.getenv('CORS_ORIGIN', 'http://localhost:5173'):<20} 
     """)
     
-    app.run(host='0.0.0.0', port=port, debug=debug)
+    app.run(host='0.0.0.0', port=port, debug=True)

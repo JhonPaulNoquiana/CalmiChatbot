@@ -60,12 +60,10 @@ interface SessionsResponse {
   count: number;
 }
 
-// ✅ Helper to get auth token from localStorage
 const getAuthToken = (): string | null => {
   return localStorage.getItem('calmi_token');
 };
 
-// ✅ Helper to add Authorization header
 const getHeaders = (includeAuth: boolean = false) => {
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
@@ -106,7 +104,7 @@ export const sendChatMessage = async (
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-      console.error('❌ API error:', errorData);
+      console.error('API error:', errorData);
       throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
     }
 
@@ -122,7 +120,7 @@ export const sendChatMessage = async (
       }),
     };
   } catch (error) {
-    console.error('❌ Error in sendChatMessage:', error);
+    console.error('Error in sendChatMessage:', error);
     throw error;
   }
 };
@@ -143,7 +141,7 @@ export const getChatHistory = async (sessionId: number): Promise<any> => {
     const data = await response.json();
     return data;
   } catch (error) {
-    console.error('❌ Error fetching chat history:', error);
+    console.error('Error fetching chat history:', error);
     throw error;
   }
 };
@@ -151,7 +149,7 @@ export const getChatHistory = async (sessionId: number): Promise<any> => {
 // UNIFIED SESSIONS FUNCTION (NEW)
 export const getUnifiedSessions = async (): Promise<UnifiedSessionsResponse> => {
   try {
-    console.log('📚 Fetching unified sessions');
+    console.log('Fetching unified sessions');
     
     const response = await fetch(`${API_BASE_URL}/api/chat/unified-sessions`, {
       method: 'GET',
@@ -165,7 +163,7 @@ export const getUnifiedSessions = async (): Promise<UnifiedSessionsResponse> => 
     const data: UnifiedSessionsResponse = await response.json();
     return data;
   } catch (error) {
-    console.error('❌ Error fetching unified sessions:', error);
+    console.error('Error fetching unified sessions:', error);
     throw error;
   }
 };

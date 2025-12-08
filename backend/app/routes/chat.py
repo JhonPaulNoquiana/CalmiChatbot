@@ -11,7 +11,7 @@ groq_service = GroqService()
 @chat_bp.route('/send', methods=['POST'])
 @optional_token_required
 def send_message():
-    """Send message and get AI response"""
+    """Send message and get AI response with safety handling"""
     try:
         data = request.get_json()
         
@@ -47,16 +47,18 @@ def send_message():
         db.session.add(user_message)
         db.session.commit()
         
-        # UPDATED: Use session_id as user_id for conversation memory
-        # This ensures each chat session maintains its own conversation history
+        # Session identifier for conversation memory
         user_identifier = f"session_{chat_session.id}"
         
-        # Generate AI response with conversation memory
-        ai_response = groq_service.generate_response(
-            user_message=message_text,
-            sentiment=sentiment,
-            user_id=user_identifier  # <-- ADDED: Pass user_identifier for memory
-        )
+        # Attempt to generate AI response safely
+        try:
+            ai_response = groq_service.generate_response(
+                user_message=message_text,
+                sentiment=sentiment,
+                user_id=user_identifier
+            )
+        except Exception as safety_err:
+            print(f"Safety block triggered: {safety_err}")
         
         # Save bot message
         bot_message = Message(

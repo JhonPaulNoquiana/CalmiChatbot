@@ -178,7 +178,7 @@ const moodOptions = [
       
       setMessages((prev) => [...prev, botMessage]);
     } catch (error) {
-      console.error('❌ API call failed, using fallback response. Error:', error);
+      console.error('API call failed, using fallback response. Error:', error);
       
       const userSentiment = detectUserSentiment(inputMessage);
       const botMessage: Message = {
