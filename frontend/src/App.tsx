@@ -523,330 +523,353 @@ const getMoodSentiment = (mood: string): 'positive' | 'neutral' | 'negative' => 
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-2 sm:p-4 relative overflow-hidden">
-      {/* Background blobs */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 left-20 w-72 h-72 bg-blue-200 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob"></div>
-        <div className="absolute top-40 right-20 w-72 h-72 bg-purple-200 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-2000"></div>
-        <div className="absolute -bottom-8 left-40 w-72 h-72 bg-pink-200 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-4000"></div>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-2 sm:p-4 relative overflow-hidden">
+    {/* Enhanced Background blobs with subtle pattern */}
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      <div className="absolute top-20 left-20 w-72 h-72 bg-blue-200 rounded-full mix-blend-multiply filter blur-xl opacity-25 animate-blob"></div>
+      <div className="absolute top-40 right-20 w-72 h-72 bg-purple-200 rounded-full mix-blend-multiply filter blur-xl opacity-25 animate-blob animation-delay-2000"></div>
+      <div className="absolute -bottom-8 left-40 w-72 h-72 bg-pink-200 rounded-full mix-blend-multiply filter blur-xl opacity-25 animate-blob animation-delay-4000"></div>
+      {/* Subtle grid pattern overlay */}
+      <div className="absolute inset-0 bg-grid-white/5"></div>
+    </div>
+
+    <div className="w-full max-w-6xl h-[90vh] sm:h-[85vh] bg-white/85 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-2xl flex relative z-10 border border-white/60 overflow-hidden">
+      {/* Mobile Header with Menu Button - Enhanced gradient */}
+      <div className="lg:hidden absolute top-0 left-0 right-0 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-600 p-4 flex items-center justify-between z-20 rounded-t-2xl shadow-lg">
+        <div className="flex items-center space-x-2">
+          <div className="bg-white/25 backdrop-blur-lg p-2 rounded-xl shadow-lg ring-1 ring-white/30">
+            <Heart className="w-5 h-5 text-white" fill="currentColor" />
+          </div>
+          <div>
+            <h1 className="text-lg font-bold tracking-tight text-white drop-shadow-md">{isGuest ? 'Calmi (Guest)' : 'Calmi'}</h1>
+            <p className="text-white/85 text-xs font-medium drop-shadow-sm">Your Wellness Companion</p>
+          </div>
+        </div>
+        <button
+          onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+          className="bg-white/25 backdrop-blur-lg p-2 rounded-xl text-white hover:bg-white/35 active:scale-95 transition-all duration-200 ring-1 ring-white/30"
+        >
+          {isMobileSidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+        </button>
       </div>
 
-      <div className="w-full max-w-6xl h-[90vh] sm:h-[85vh] bg-white/80 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-2xl flex relative z-10 border border-white/50 overflow-hidden">
-        {/* Mobile Header with Menu Button */}
-        <div className="lg:hidden absolute top-0 left-0 right-0 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 p-4 flex items-center justify-between z-20 rounded-t-2xl">
-          <div className="flex items-center space-x-2">
-            <div className="bg-white/20 backdrop-blur-lg p-2 rounded-xl shadow-lg">
-              <Heart className="w-5 h-5 text-white" fill="currentColor" />
-            </div>
-            <div>
-              <h1 className="text-lg font-bold tracking-tight text-white">{isGuest ? 'Calmi (Guest)' : 'Calmi'}</h1>
-              <p className="text-white/80 text-xs font-medium">Your Wellness Companion</p>
-            </div>
+      {/* Sidebar - Desktop always visible, Mobile overlay */}
+      <div className={`
+        fixed lg:relative inset-y-0 left-0 z-30 w-80 bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-600 
+        lg:rounded-l-3xl p-6 flex flex-col text-white shadow-2xl transition-all duration-300 ease-out
+        ${isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+      `}>
+        {/*Desktop Header - Enhanced */}
+        <div className="hidden lg:flex items-center space-x-3 mb-10">
+          <div className="bg-white/25 backdrop-blur-lg p-3 rounded-2xl shadow-lg ring-1 ring-white/30">
+            <Heart className="w-7 h-7 text-white" fill="currentColor" />
           </div>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight drop-shadow-lg">{isGuest ? 'Calmi (Guest)' : 'Calmi'}</h1>
+            <p className="text-white/85 text-sm font-medium drop-shadow-sm">Your Wellness Companion</p>
+          </div>
+        </div>
+
+        {/* Mobile close button */}
+        <div className="lg:hidden flex justify-end mb-4">
           <button
-            onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
-            className="bg-white/20 backdrop-blur-lg p-2 rounded-xl text-white hover:bg-white/30 transition-all"
+            onClick={() => setIsMobileSidebarOpen(false)}
+            className="bg-white/25 backdrop-blur-lg p-2 rounded-xl hover:bg-white/35 active:scale-95 transition-all duration-200 ring-1 ring-white/30"
           >
-            {isMobileSidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Sidebar - Desktop always visible, Mobile overlay */}
-        <div className={`
-          fixed lg:relative inset-y-0 left-0 z-30 w-80 bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 
-          lg:rounded-l-3xl p-6 flex flex-col text-white shadow-xl transition-transform duration-300 ease-in-out
-          ${isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-        `}>
-          {/*Desktop Header*/}
-          <div className="hidden lg:flex items-center space-x-3 mb-10">
-            <div className="bg-white/20 backdrop-blur-lg p-3 rounded-2xl shadow-lg">
-              <Heart className="w-7 h-7 text-white" fill="currentColor" />
+        <nav className="space-y-3 mb-10 flex-1">
+          <button
+            onClick={() => {
+              setActiveFeature('chat');
+              setIsMobileSidebarOpen(false);
+            }}
+            className={`group w-full flex items-center space-x-3 p-4 rounded-2xl text-left transition-all duration-300 hover:shadow-lg ${
+              activeFeature === 'chat' 
+                ? 'bg-white text-indigo-600 shadow-xl scale-105 ring-2 ring-indigo-200/50' 
+                : 'text-white hover:bg-white/15 hover:scale-[1.02] hover:shadow-md'
+            }`}
+          >
+            <Bot className="w-5 h-5 flex-shrink-0" />
+            <span className="font-semibold group-hover:translate-x-1 transition-transform">AI Chat</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveFeature('mood');
+              setIsMobileSidebarOpen(false);
+            }}
+            className={`group w-full flex items-center space-x-3 p-4 rounded-2xl text-left transition-all duration-300 hover:shadow-lg ${
+              activeFeature === 'mood' 
+                ? 'bg-white text-indigo-600 shadow-xl scale-105 ring-2 ring-indigo-200/50' 
+                : 'text-white hover:bg-white/15 hover:scale-[1.02] hover:shadow-md'
+            }`}
+          >
+            <Smile className="w-5 h-5 flex-shrink-0" />
+            <span className="font-semibold group-hover:translate-x-1 transition-transform">Mood Check-in</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveFeature('history');
+              setIsMobileSidebarOpen(false);
+            }}
+            className={`group w-full flex items-center space-x-3 p-4 rounded-2xl text-left transition-all duration-300 hover:shadow-lg ${
+              activeFeature === 'history' 
+                ? 'bg-white text-indigo-600 shadow-xl scale-105 ring-2 ring-indigo-200/50' 
+                : 'text-white hover:bg-white/15 hover:scale-[1.02] hover:shadow-md'
+            }`}
+          >
+            <HistoryIcon className="w-5 h-5 flex-shrink-0" />
+            <span className="font-semibold group-hover:translate-x-1 transition-transform">History</span>
+          </button>
+        </nav>
+
+        <div className="space-y-3">
+          <button
+            onClick={startNewChat}
+            className="w-full bg-gradient-to-r from-indigo-400 to-purple-600 text-white py-3 rounded-2xl font-semibold hover:shadow-xl active:scale-95 transition-all duration-300 hover:scale-105 mb-2 ring-1 ring-white/30"
+          >
+            New Chat
+          </button>
+
+          {moodCheckError && (
+            <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+              <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-gray-100 animate-scale-in text-center">
+                <h3 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-4">
+                  {moodCheckError}
+                </h3>
+                <button
+                  onClick={startNewChat}
+                  className="w-full bg-gradient-to-r from-indigo-500 to-purple-500 text-white py-3 rounded-2xl font-semibold hover:shadow-lg transition-all duration-300 hover:scale-105"
+                >
+                  New Chat
+                </button>
+                <button
+                  onClick={() => setMoodCheckError('')}
+                  className="w-full mt-3 bg-gray-100 text-indigo-600 py-3 rounded-2xl font-semibold hover:bg-gray-200 active:scale-95 transition-all duration-300"
+                >
+                  Close
+                </button>
+              </div>
             </div>
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight">{isGuest ? 'Calmi (Guest)' : 'Calmi'}</h1>
-              <p className="text-white/80 text-sm font-medium">Your Wellness Companion</p>
-            </div>
+          )}
+
+          <button
+            onClick={getMotivationalTip}
+            className="w-full bg-white/25 backdrop-blur-lg text-white py-3 sm:py-4 rounded-2xl font-semibold hover:bg-white/40 active:scale-95 transition-all duration-300 flex items-center justify-center space-x-2 shadow-lg hover:scale-105 text-sm sm:text-base ring-1 ring-white/30"
+          >
+            <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
+            <span className="truncate">Daily Inspiration {inspirationClicks < 5 ? `(${5 - inspirationClicks})` : '(Max)'}</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setShowMoodCheckin(true);
+              setIsMobileSidebarOpen(false);
+            }}
+            className="w-full border-2 border-white/60 text-white py-3 sm:py-4 rounded-2xl font-semibold hover:bg-white/15 active:scale-95 transition-all duration-300 flex items-center justify-center space-x-2 hover:scale-105 text-sm sm:text-base ring-1 ring-white/30"
+            disabled={!canCheckInMood}
+            style={!canCheckInMood ? { opacity: 0.6, cursor: 'not-allowed' } : {}}
+          >
+            <Wind className="w-4 h-4 sm:w-5 sm:h-5" />
+            <span>Quick Check-in</span>
+          </button>
+
+          <button
+            onClick={() => {
+              localStorage.removeItem('calmi_token');
+              localStorage.removeItem('calmi_user');
+              localStorage.removeItem('calmi_guest');
+              localStorage.removeItem('calmi_session');
+              localStorage.removeItem('calmi_messages');
+              
+              setIsAuthenticated(false);
+              setIsGuest(false);
+              setUserName("");
+              setMessages([]);
+              setLoginFromHistory(false);
+              setIsMobileSidebarOpen(false);
+              
+              setTimeout(() => {
+                setShowLoginPage(false);
+                setShowRegisterPage(false);
+              }, 500);
+            }}
+            className="w-full mt-4 bg-white/15 text-white py-3 rounded-2xl font-semibold hover:bg-white/30 active:scale-95 transition-all duration-300 ring-1 ring-white/30"
+          >
+            {isGuest ? 'Exit Guest Mode' : 'Logout'}
+          </button>
+        </div>
+      </div>
+
+      {/*Mobile Sidebar Overlay*/}
+      {isMobileSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-20 lg:hidden"
+          onClick={() => setIsMobileSidebarOpen(false)}
+        />
+      )}
+
+      {/* Main content */}
+      <div className="flex-1 flex flex-col bg-white/60 backdrop-blur-sm rounded-r-2xl sm:rounded-r-3xl mt-16 lg:mt-0 border-l border-white/30">
+        {activeFeature === 'chat' && (
+          <Chat
+            messages={messages.filter((msg) => msg.sessionId === sessionId)}
+            isLoading={isLoading}
+            inputMessage={inputMessage}
+            setInputMessage={setInputMessage}
+            sendMessage={sendMessage}
+            handleKeyPress={handleKeyPress}
+            messagesEndRef={messagesEndRef}
+          />
+        )}
+
+        {activeFeature === 'mood' && (
+          <Mood
+            currentMood={currentMood}
+            setCurrentMood={setCurrentMood}
+            moodIntensity={moodIntensity}
+            setMoodIntensity={setMoodIntensity}
+            moodNote={moodNote}
+            setMoodNote={setMoodNote}
+            submitMoodCheckIn={submitMoodCheckIn}
+            moodOptions={moodOptions}
+            showMoodCheckin={showMoodCheckin}
+            setShowMoodCheckin={setShowMoodCheckin}
+            renderOnlyModal={false}
+          />
+        )}
+
+        {activeFeature === 'history' && (
+          <History
+            getMoodEmoji={getMoodEmoji}
+            isAuthenticated={isAuthenticated}
+            isGuest={isGuest}
+            onOpenPreviousChat={handleOpenPreviousChat}
+            onShowLogin={() => {
+              // Logout guest first
+              localStorage.removeItem('calmi_token');
+              localStorage.removeItem('calmi_user');
+              localStorage.removeItem('calmi_guest');
+              localStorage.removeItem('calmi_session');
+              
+              // Reset states
+              setIsAuthenticated(false);
+              setIsGuest(false);
+              setUserName("");
+              setMessages([]);
+              
+              // Show login page
+              setShowLoginPage(true);
+            }}
+          />
+        )}
+      </div>
+    </div>
+
+    {/* Render quick check-in modal */}
+    {showMoodCheckin && (
+      <Mood
+        currentMood={currentMood}
+        setCurrentMood={setCurrentMood}
+        moodIntensity={moodIntensity}
+        setMoodIntensity={setMoodIntensity}
+        moodNote={moodNote}
+        setMoodNote={setMoodNote}
+        submitMoodCheckIn={submitMoodCheckIn}
+        moodOptions={moodOptions}
+        showMoodCheckin={showMoodCheckin}
+        setShowMoodCheckin={setShowMoodCheckin}
+        renderOnlyModal={true}
+      />
+    )}
+
+    {/* Render mood record detail modal - Enhanced */}
+    {showRecordDetail && selectedRecord && (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+        <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-gray-100 animate-scale-in">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+              Mood Details
+            </h3>
+            <button
+              onClick={() => setShowRecordDetail(false)}
+              className="text-gray-400 hover:text-gray-600 text-2xl transition-all duration-200 hover:scale-110"
+            >
+              ×
+            </button>
           </div>
 
-          {/* Mobile close button */}
-          <div className="lg:hidden flex justify-end mb-4">
-            <button
-              onClick={() => setIsMobileSidebarOpen(false)}
-              className="bg-white/20 backdrop-blur-lg p-2 rounded-xl hover:bg-white/30 transition-all"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
+          <div className="space-y-6">
+            <div className="text-center">
+              <div className="text-5xl sm:text-6xl mb-4">{getMoodEmoji(selectedRecord.mood)}</div>
+              <div className="font-bold text-xl sm:text-2xl text-gray-800 capitalize">{selectedRecord.mood}</div>
+              <div className="text-sm text-gray-500 mt-2">{selectedRecord.timestamp}</div>
+            </div>
 
-          <nav className="space-y-3 mb-10 flex-1">
-            <button
-              onClick={() => {
-                setActiveFeature('chat');
-                setIsMobileSidebarOpen(false);
-              }}
-              className={`w-full flex items-center space-x-3 p-4 rounded-2xl text-left transition-all duration-300 ${
-                activeFeature === 'chat' ? 'bg-white text-indigo-600 shadow-lg scale-105' : 'text-white hover:bg-white/10 hover:scale-102'
-              }`}
-            >
-              <Bot className="w-5 h-5" />
-              <span className="font-semibold">AI Chat</span>
-            </button>
+            <div className="bg-gradient-to-br from-indigo-50 to-purple-50 p-5 rounded-2xl border border-indigo-100 shadow-sm">
+              <div className="text-xs text-gray-600 font-semibold mb-2">Intensity Level</div>
+              <div className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                {selectedRecord.intensity}/10
+              </div>
+            </div>
 
-            <button
-              onClick={() => {
-                setActiveFeature('mood');
-                setIsMobileSidebarOpen(false);
-              }}
-              className={`w-full flex items-center space-x-3 p-4 rounded-2xl text-left transition-all duration-300 ${
-                activeFeature === 'mood' ? 'bg-white text-indigo-600 shadow-lg scale-105' : 'text-white hover:bg-white/10 hover:scale-102'
-              }`}
-            >
-              <Smile className="w-5 h-5" />
-              <span className="font-semibold">Mood Check-in</span>
-            </button>
-
-            <button
-              onClick={() => {
-                setActiveFeature('history');
-                setIsMobileSidebarOpen(false);
-              }}
-              className={`w-full flex items-center space-x-3 p-4 rounded-2xl text-left transition-all duration-300 ${
-                activeFeature === 'history' ? 'bg-white text-indigo-600 shadow-lg scale-105' : 'text-white hover:bg-white/10 hover:scale-102'
-              }`}
-            >
-              <HistoryIcon className="w-5 h-5" />
-              <span className="font-semibold">History</span>
-            </button>
-          </nav>
-
-          <div className="space-y-3">
-            <button
-              onClick={startNewChat}
-              className="w-full bg-gradient-to-r from-indigo-500 to-purple-500 text-white py-3 rounded-2xl font-semibold hover:shadow-lg transition-all duration-300 hover:scale-105 mb-2"
-            >
-              New Chat
-            </button>
-
-            {moodCheckError && (
-              <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-                <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-gray-100 animate-scale-in text-center">
-                  <h3 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-4">
-                    {moodCheckError}
-                  </h3>
-                  <button
-                    onClick={startNewChat}
-                    className="w-full bg-gradient-to-r from-indigo-500 to-purple-500 text-white py-3 rounded-2xl font-semibold hover:shadow-lg transition-all duration-300 hover:scale-105"
-                  >
-                    New Chat
-                  </button>
-                  <button
-                    onClick={() => setMoodCheckError('')}
-                    className="w-full mt-3 bg-gray-100 text-indigo-600 py-3 rounded-2xl font-semibold hover:bg-gray-200 transition-all duration-300"
-                  >
-                    Close
-                  </button>
-                </div>
+            {selectedRecord.note && (
+              <div className="bg-gradient-to-br from-gray-50 to-gray-100 p-5 rounded-2xl border border-gray-200 shadow-sm">
+                <div className="text-xs text-gray-600 font-semibold mb-2">Notes</div>
+                <div className="text-sm text-gray-800 leading-relaxed">{selectedRecord.note}</div>
               </div>
             )}
 
             <button
-              onClick={getMotivationalTip}
-              className="w-full bg-white/20 backdrop-blur-lg text-white py-3 sm:py-4 rounded-2xl font-semibold hover:bg-white/30 transition-all duration-300 flex items-center justify-center space-x-2 shadow-lg hover:scale-105 text-sm sm:text-base"
+              onClick={() => retrieveChatForSession(selectedRecord.sessionId)}
+              className="w-full bg-gradient-to-r from-indigo-500 to-purple-500 text-white py-3 rounded-2xl font-semibold hover:shadow-xl active:scale-95 transition-all duration-300 hover:scale-105 ring-1 ring-indigo-200/50"
             >
-              <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
-              <span className="truncate">Daily Inspiration {inspirationClicks < 5 ? `(${5 - inspirationClicks})` : '(Max)'}</span>
-            </button>
-
-            <button
-              onClick={() => {
-                setShowMoodCheckin(true);
-                setIsMobileSidebarOpen(false);
-              }}
-              className="w-full border-2 border-white/50 text-white py-3 sm:py-4 rounded-2xl font-semibold hover:bg-white/10 transition-all duration-300 flex items-center justify-center space-x-2 hover:scale-105 text-sm sm:text-base"
-              disabled={!canCheckInMood}
-              style={!canCheckInMood ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
-            >
-              <Wind className="w-4 h-4 sm:w-5 sm:h-5" />
-              <span>Quick Check-in</span>
-            </button>
-
-            <button
-              onClick={() => {
-                localStorage.removeItem('calmi_token');
-                localStorage.removeItem('calmi_user');
-                localStorage.removeItem('calmi_guest');
-                localStorage.removeItem('calmi_session');
-                localStorage.removeItem('calmi_messages');
-                
-                setIsAuthenticated(false);
-                setIsGuest(false);
-                setUserName("");
-                setMessages([]);
-                setLoginFromHistory(false);
-                setIsMobileSidebarOpen(false);
-                
-                setTimeout(() => {
-                  setShowLoginPage(false);
-                  setShowRegisterPage(false);
-                }, 500);
-              }}
-              className="w-full mt-4 bg-white/10 text-white py-3 rounded-2xl font-semibold hover:bg-white/20 transition-all duration-300"
-            >
-              {isGuest ? 'Exit Guest Mode' : 'Logout'}
+              Retrieve Chat
             </button>
           </div>
-        </div>
-
-        {/*Mobile Sidebar Overlay*/}
-        {isMobileSidebarOpen && (
-          <div
-            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-20 lg:hidden"
-            onClick={() => setIsMobileSidebarOpen(false)}
-          />
-        )}
-
-        {/* Main content */}
-        <div className="flex-1 flex flex-col bg-white/50 backdrop-blur-sm rounded-r-2xl sm:rounded-r-3xl mt-16 lg:mt-0">
-          {activeFeature === 'chat' && (
-            <Chat
-              messages={messages.filter((msg) => msg.sessionId === sessionId)}
-              isLoading={isLoading}
-              inputMessage={inputMessage}
-              setInputMessage={setInputMessage}
-              sendMessage={sendMessage}
-              handleKeyPress={handleKeyPress}
-              messagesEndRef={messagesEndRef}
-            />
-          )}
-
-          {activeFeature === 'mood' && (
-            <Mood
-              currentMood={currentMood}
-              setCurrentMood={setCurrentMood}
-              moodIntensity={moodIntensity}
-              setMoodIntensity={setMoodIntensity}
-              moodNote={moodNote}
-              setMoodNote={setMoodNote}
-              submitMoodCheckIn={submitMoodCheckIn}
-              moodOptions={moodOptions}
-              showMoodCheckin={showMoodCheckin}
-              setShowMoodCheckin={setShowMoodCheckin}
-              renderOnlyModal={false}
-            />
-          )}
-
-          {activeFeature === 'history' && (
-            <History
-              getMoodEmoji={getMoodEmoji}
-              isAuthenticated={isAuthenticated}
-              isGuest={isGuest}
-              onOpenPreviousChat={handleOpenPreviousChat}
-              onShowLogin={() => {
-                
-                // Logout guest first
-                localStorage.removeItem('calmi_token');
-                localStorage.removeItem('calmi_user');
-                localStorage.removeItem('calmi_guest');
-                localStorage.removeItem('calmi_session');
-                
-                // Reset states
-                setIsAuthenticated(false);
-                setIsGuest(false);
-                setUserName("");
-                setMessages([]);
-                
-                // Show login page
-                setShowLoginPage(true);
-              }}
-            />
-          )}
         </div>
       </div>
+    )}
 
-      {/* Render quick check-in modal */}
-      {showMoodCheckin && (
-        <Mood
-          currentMood={currentMood}
-          setCurrentMood={setCurrentMood}
-          moodIntensity={moodIntensity}
-          setMoodIntensity={setMoodIntensity}
-          moodNote={moodNote}
-          setMoodNote={setMoodNote}
-          submitMoodCheckIn={submitMoodCheckIn}
-          moodOptions={moodOptions}
-          showMoodCheckin={showMoodCheckin}
-          setShowMoodCheckin={setShowMoodCheckin}
-          renderOnlyModal={true}
-        />
-      )}
-
-      {/* Render mood record detail modal */}
-      {showRecordDetail && selectedRecord && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-gray-100 animate-scale-in">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                Mood Details
-              </h3>
-              <button
-                onClick={() => setShowRecordDetail(false)}
-                className="text-gray-400 hover:text-gray-600 text-2xl transition-colors"
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="space-y-6">
-              <div className="text-center">
-                <div className="text-5xl sm:text-6xl mb-4">{getMoodEmoji(selectedRecord.mood)}</div>
-                <div className="font-bold text-xl sm:text-2xl text-gray-800 capitalize">{selectedRecord.mood}</div>
-                <div className="text-sm text-gray-500 mt-2">{selectedRecord.timestamp}</div>
-              </div>
-
-              <div className="bg-gradient-to-br from-indigo-50 to-purple-50 p-5 rounded-2xl border border-indigo-100">
-                <div className="text-xs text-gray-600 font-semibold mb-2">Intensity Level</div>
-                <div className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                  {selectedRecord.intensity}/10
-                </div>
-              </div>
-
-              {selectedRecord.note && (
-                <div className="bg-gradient-to-br from-gray-50 to-gray-100 p-5 rounded-2xl border border-gray-200">
-                  <div className="text-xs text-gray-600 font-semibold mb-2">Notes</div>
-                  <div className="text-sm text-gray-800">{selectedRecord.note}</div>
-                </div>
-              )}
-
-              <button
-                onClick={() => retrieveChatForSession(selectedRecord.sessionId)}
-                className="w-full bg-gradient-to-r from-indigo-500 to-purple-500 text-white py-3 rounded-2xl font-semibold hover:shadow-lg transition-all duration-300 hover:scale-105"
-              >
-                Retrieve Chat
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <style>{`
-        @keyframes blob {
-          0%, 100% { transform: translate(0, 0) scale(1); }
-          33% { transform: translate(30px, -50px) scale(1.1); }
-          66% { transform: translate(-20px, 20px) scale(0.9); }
-        }
-        .animate-blob { animation: blob 7s infinite; }
-        .animation-delay-2000 { animation-delay: 2s; }
-        .animation-delay-4000 { animation-delay: 4s; }
-        @keyframes fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .animate-fade-in { animation: fade-in 0.4s ease-out; }
-        @keyframes scale-in { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
-        .animate-scale-in { animation: scale-in 0.3s ease-out; }
-        .hover\\:scale-102:hover { transform: scale(1.02); }
-        .hover\\:scale-105:hover { transform: scale(1.05); }
-        .hover\\:scale-110:hover { transform: scale(1.10); }
-        input[type="range"]::-webkit-slider-thumb { appearance: none; width: 24px; height: 24px; background: linear-gradient(135deg, rgb(99 102 241), rgb(168 85 247)); border-radius: 50%; cursor: pointer; box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4); }
-        input[type="range"]::-moz-range-thumb { width: 24px; height: 24px; background: linear-gradient(135deg, rgb(99 102 241), rgb(168 85 247)); border-radius: 50%; cursor: pointer; box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4); border: none; }
-      `}</style>
+    <style>{`
+      @keyframes blob {
+        0%, 100% { transform: translate(0, 0) scale(1); }
+        33% { transform: translate(30px, -50px) scale(1.1); }
+        66% { transform: translate(-20px, 20px) scale(0.9); }
+      }
+      .animate-blob { animation: blob 7s infinite; }
+      .animation-delay-2000 { animation-delay: 2s; }
+      .animation-delay-4000 { animation-delay: 4s; }
+      @keyframes fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+      .animate-fade-in { animation: fade-in 0.4s ease-out; }
+      @keyframes scale-in { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+      .animate-scale-in { animation: scale-in 0.3s ease-out; }
+      .bg-grid-white {
+        background-image: linear-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1px),
+                          linear-gradient(90deg, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+      input[type="range"]::-webkit-slider-thumb { 
+        appearance: none; 
+        width: 24px; height: 24px; 
+        background: linear-gradient(135deg, rgb(99 102 241), rgb(168 85 247)); 
+        border-radius: 50%; 
+        cursor: pointer; 
+        box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4); 
+      }
+      input[type="range"]::-moz-range-thumb { 
+        width: 24px; height: 24px; 
+        background: linear-gradient(135deg, rgb(99 102 241), rgb(168 85 247)); 
+        border-radius: 50%; 
+        cursor: pointer; 
+        box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4); 
+        border: none; 
+      }
+    `}</style>
     </div>
   );
 }
