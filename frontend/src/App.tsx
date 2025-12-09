@@ -261,7 +261,7 @@ const moodOptions = [
       setIsMobileSidebarOpen(false);
       
     } catch (error: any) {
-      console.error('❌ Failed to save mood check-in:', error);
+      console.error('Failed to save mood check-in:', error);
       
       // Show error to user
       setMoodCheckError(error.message || 'Failed to save mood check-in. Please try again.');
@@ -557,7 +557,7 @@ const getMoodSentiment = (mood: string): 'positive' | 'neutral' | 'negative' => 
           lg:rounded-l-3xl p-6 flex flex-col text-white shadow-xl transition-transform duration-300 ease-in-out
           ${isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         `}>
-          {/* Desktop Header */}
+          {/*Desktop Header*/}
           <div className="hidden lg:flex items-center space-x-3 mb-10">
             <div className="bg-white/20 backdrop-blur-lg p-3 rounded-2xl shadow-lg">
               <Heart className="w-7 h-7 text-white" fill="currentColor" />
@@ -697,7 +697,7 @@ const getMoodSentiment = (mood: string): 'positive' | 'neutral' | 'negative' => 
           </div>
         </div>
 
-        {/* Mobile Sidebar Overlay */}
+        {/*Mobile Sidebar Overlay*/}
         {isMobileSidebarOpen && (
           <div
             className="fixed inset-0 bg-black/40 backdrop-blur-sm z-20 lg:hidden"
