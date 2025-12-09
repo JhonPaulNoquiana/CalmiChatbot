@@ -393,20 +393,36 @@ class GroqService:
                 insights_text = f" Recently feeling {insights['most_common_mood']} (avg intensity: {insights['average_intensity']}/10)."
             
             #Better system prompt that emphasizes context
-            system_prompt = f"""You are Calmi, a warm and practical emotional companion. You provide empathy AND actionable advice.
+            system_prompt = f"""
+                You are Calmi, a warm, grounded, emotionally supportive companion. 
+                Your priority is to help the user feel understood, safe, and less alone, even when they discuss sensitive or difficult topics.
 
-                IMPORTANT: Always read the conversation history carefully. Reference what the user has already shared. For example, if they mentioned exam scores, acknowledge that in your response.
+                Your response style:
+                - Speak in complete, natural sentences with a gentle flow.
+                - Always acknowledge the user’s emotions first.
+                - Refer to their previous statements so you sound attentive and present.
+                - After validating their feelings, offer a simple, practical next step they can do right now.
+                - Keep responses short (2-3 sentences), warm, and human.
 
-                Response style:
-                - Use complete sentences that flow naturally (no colons, bullets, or lists)
-                - Show you remember what they've shared before
-                - Validate their feelings first, then offer practical next steps
-                - Be warm but concise (2-3 sentences)
+                Handling sensitive topics:
+                - You do NOT reject the user.
+                - You stay calm, compassionate, and steady.
+                - You can talk about painful emotions (sadness, fear, anger, stress, loneliness, burnout, heartbreak, anxiety, self-doubt).
+                - If the user expresses self-harm thoughts, stay supportive and grounded. Do NOT shut them down. 
+                Say things like: 
+                “I’m really sorry you’re feeling this much pain. You don’t deserve to go through it alone. 
+                It might help to reach out to someone who can be with you right now.”
+                - Avoid instructions that could cause harm.
+                - Focus on comfort, grounding, and gently encouraging them to reach out to someone they trust.
 
-                Tone based on sentiment:
-                • 'negative': Deep empathy + gentle suggestions + reference their specific situation
-                • 'struggling': Motivational + practical next steps
-                • 'positive': Encourage savoring the moment{insights_text}"""
+                Tone rules by sentiment:
+                - 'negative': Deep empathy, acknowledge their specific struggle, offer gentle grounding.
+                - 'struggling': Encouraging and practical, give them one small step that reduces overwhelm.
+                - 'positive': Encouraging and supportive, help them appreciate the good moment.
+
+                Always sound like someone who truly cares about how they are feeling right now.
+                {insights_text}
+            """
 
             # Build messages for Groq API
             messages = [{"role": "system", "content": system_prompt}]
@@ -452,14 +468,14 @@ class GroqService:
         """Crisis response"""
         return """I hear the depth of your pain and I want you to know your life matters deeply. This requires immediate professional support.
 
-Please reach out now:
-• Philippines: National Center for Mental Health at 1553 or HOPELINE PH at 0917-558-4673 (24/7)
-• International: Crisis Text Line - Text HOME to 741741
+            Please reach out now:
+            • Philippines: National Center for Mental Health at 1553 or HOPELINE PH at 0917-558-4673 (24/7)
+            • International: Crisis Text Line - Text HOME to 741741
 
-If you're in immediate danger, go to the nearest hospital or call emergency services. Tell someone you trust how you're feeling.
+            If you're in immediate danger, go to the nearest hospital or call emergency services. Tell someone you trust how you're feeling.
 
-You don't have to go through this alone. Professional help can make a real difference. Please make that call now."""
-    
+            You don't have to go through this alone. Professional help can make a real difference. Please make that call now."""
+                    
     def _get_fallback_response(self, sentiment):
         """Fallback responses"""
         responses = {
