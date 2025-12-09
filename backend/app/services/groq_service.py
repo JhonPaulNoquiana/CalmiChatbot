@@ -239,11 +239,41 @@ class GroqService:
 
         return has_personal_reference
     
-    def analyze_sentiment(self, message):
-        """Analyze sentiment by returning the single highest-priority intent"""
+    def analyze_sentiment(self, message, user_id=None):
+        """Analyze sentiment with optional conversation context"""
         detected = self._match_intent_keywords(message)
         
-        # Iterate through intent_map in priority order
+        # Check for continuation of emotional conversation
+        if user_id and user_id in self.conversation_histories:
+            history = self.conversation_histories[user_id]
+            if history:
+                # Get last assistant message
+                last_assistant_msg = None
+                for entry in reversed(history):
+                    if entry["role"] == "assistant":
+                        last_assistant_msg = entry["message"].lower()
+                        break
+                
+                # If last assistant was discussing emotional topic, continue it
+                if last_assistant_msg and any(emotion_word in last_assistant_msg 
+                                            for emotion_word in ['feel', 'emotional', 'tough', 'hard', 'difficult', 'struggl', 'guilt', 'regret', 'sorry']):
+                    # Check if current message continues with pronouns, references, or reply-related words
+                    lower_msg = message.lower()
+                    
+                    # Check for continuation keywords
+                    continuation_keywords = [
+                        'they', 'them', 'their', 'he', 'she', 'it', 'this', 'that',
+                        'reply', 'respond', 'answer', 'message', 'text', 'call',
+                        'group', 'friend', 'capstone', 'project', 'team'
+                    ]
+                    
+                    # Check if any continuation keyword appears as a whole word
+                    import re
+                    if any(re.search(r'\b' + keyword + r'\b', lower_msg) for keyword in continuation_keywords):
+                        # This is likely continuing the previous emotional conversation
+                        return 'negative'
+        
+        # Original logic continues...
         for intent_type in self.intent_map.keys():
             if intent_type == 'negative':
                 lower_message = message.lower()
@@ -254,7 +284,6 @@ class GroqService:
                     'what now', 'what next', 'how can i', 'why do i feel'
                 ]
                 
-                # Check for "struggling" intent
                 if any(phrase in lower_message for phrase in struggle_keywords) and 'negative' not in detected:
                     return 'struggling'
                 
@@ -276,8 +305,36 @@ class GroqService:
             if user_id is None:
                 user_id = 'default'
             
+            # Get conversation history first
+            history = self.get_conversation_history(user_id)
+            
             # Add 'advice_seeking' to special_sentiments
             special_sentiments = ['crisis', 'creator', 'grateful', 'goodbye', 'greeting', 'advice_seeking']
+            
+            # Check if this is truly a new greeting or continuation of conversation
+            if sentiment == 'greeting' and history:
+                # Get last few messages to check context
+                recent_msgs = history[-4:] if len(history) >= 4 else history
+                
+                # Check if last exchange was within last few minutes and emotional
+                if recent_msgs:
+                    last_timestamp = datetime.fromisoformat(recent_msgs[-1]["timestamp"])
+                    time_diff = datetime.now() - last_timestamp
+                    
+                    # If last message was recent (within 5 minutes) and emotional, continue conversation
+                    if time_diff < timedelta(minutes=5):
+                        # Check if last assistant message was emotional
+                        last_assistant_msg = None
+                        for entry in reversed(history):
+                            if entry["role"] == "assistant":
+                                last_assistant_msg = entry["message"].lower()
+                                break
+                        
+                        # If we were just talking about something emotional, don't treat as new greeting
+                        if last_assistant_msg and any(word in last_assistant_msg for word in 
+                                                    ['feel', 'emotional', 'tough', 'hard', 'struggle', 'dilemma', 'guilt']):
+                            # Override sentiment to continue conversation
+                            sentiment = 'negative'  # or re-analyze with context
             
             if sentiment in special_sentiments:
                 if sentiment == 'crisis':
@@ -293,7 +350,6 @@ class GroqService:
             # For emotional support topics, use Groq API (not fallback)
             if self.client and self.is_emotional_support_topic(user_message):
                 # Check if previous assistant message was advice; if yes, continue the conversation
-                history = self.get_conversation_history(user_id)
                 if history and history[-1]["role"] == "assistant":
                     last_msg = history[-1]["message"]
                     if any(word in last_msg.lower() for word in ['advice', 'support', 'guidance', 'encouragement']):

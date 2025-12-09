@@ -533,7 +533,7 @@ const getMoodSentiment = (mood: string): 'positive' | 'neutral' | 'negative' => 
       <div className="absolute inset-0 bg-grid-white/5"></div>
     </div>
 
-    <div className="w-full max-w-6xl h-[90vh] sm:h-[85vh] bg-white/85 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-2xl flex relative z-10 border border-white/60 overflow-hidden">
+    <div className="w-full max-w-6xl h-[90dvh] sm:h-[85vh] bg-white/85 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-2xl flex relative z-10 border border-white/60 overflow-hidden">
       {/* Mobile Header with Menu Button - Enhanced gradient */}
       <div className="lg:hidden absolute top-0 left-0 right-0 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-600 p-4 flex items-center justify-between z-20 rounded-t-2xl shadow-lg">
         <div className="flex items-center space-x-2">
