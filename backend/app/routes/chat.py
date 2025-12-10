@@ -35,13 +35,8 @@ def send_message():
             db.session.add(chat_session)
             db.session.commit()
         
-        # Session identifier for conversation memory - USE THIS FOR SENTIMENT ANALYSIS TOO
-        user_identifier = f"session_{chat_session.id}"
-        
-        # IMPORTANT FIX: Pass user_identifier to analyze_sentiment for context-aware analysis
-        sentiment = groq_service.analyze_sentiment(message_text, user_identifier)  # <-- ADD user_identifier HERE
-        
         # Save user message
+        sentiment = groq_service.analyze_sentiment(message_text)
         user_message = Message(
             session_id=chat_session.id,
             user_id=request.user_id,
@@ -52,6 +47,9 @@ def send_message():
         db.session.add(user_message)
         db.session.commit()
         
+        # Session identifier for conversation memory
+        user_identifier = f"session_{chat_session.id}"
+        
         # Attempt to generate AI response safely
         try:
             ai_response = groq_service.generate_response(
@@ -61,8 +59,6 @@ def send_message():
             )
         except Exception as safety_err:
             print(f"Safety block triggered: {safety_err}")
-            # Provide a safe fallback response
-            ai_response = "I'm here to listen. How are you feeling about this situation?"
         
         # Save bot message
         bot_message = Message(

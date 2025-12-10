@@ -1,7 +1,7 @@
 import os
 import random
+import re
 import traceback
-from datetime import datetime, timedelta
 from groq import Groq
 import logging
 
@@ -20,97 +20,18 @@ class GroqService:
             self.client = Groq(api_key=self.api_key)
         else:
             self.client = None
-        
+            
+        # Store conversation history per user (INCREASED MEMORY)
         self.conversation_histories = {}
-        self.user_patterns = {}
-        self.coping_strategies = self._initialize_coping_strategies()
         
-        self.intent_map = {
-            # Priority 1: Crisis
-            'crisis': [
-                'suicide', 'suicidal', 'kill myself', 'end my life', 'want to die',
-                'harm myself', 'hurt myself', 'self harm', 'self-harm', 'cut myself',
-                'better off dead', 'no reason to live', "can't go on", 'end it all'
-            ],
-            # Priority 2: Creator/Bot Identity
-            'creator': [
-                'who made you', 'who created you', 'who developed you',
-                'who built you', 'who programmed you', 'who designed you',
-                'your creator', 'your developer', 'your maker'
-            ],
-            # Priority 3: Negative Emotions
-            'negative': [
-                'sad', 'depressed', 'anxious', 'stressed', 'worried', 'angry', 'frustrated',
-                'lonely', 'isolated', 'hopeless', 'miserable', 'heartbroken', 'grieving', 'devastated',
-                'broken', 'shattered', 'drowning', 'falling apart', 'hurting', 'pain', 'suffering', 
-                'overwhelmed', 'cant cope', "can't cope", 'cant handle', 'bad', 'terrible', 'awful', 
-                'hate', 'scared', 'fear', 'exhausted', 'useless', 'worthless', 'cry', 'crying',
-                'nervous', 'tense', 'panic'
-            ],
-            # Priority 4: Guidance/Advice Seeking
-            'advice_seeking': [
-                'advice', 'tips', 'suggestions', 'recommend', 'guidance',
-                'what should i do', 'how can i', 'help me with', 'what to do', 'how to face', 
-                'how to get through', 'i need direction', 'i need motivation', "i don't know", 
-                'lost', 'confused', 'stuck', 'what now', 'what next', 'why do i feel',
-                'assignment', 'homework', 'project'  
-            ],
-            # Priority 5: Positive Emotions
-            'positive': [
-                'happy', 'good', 'great', 'amazing', 'wonderful', 'love', 'excited',
-                'grateful', 'awesome', 'fantastic', 'brilliant', 'excellent',
-                'proud', 'joyful', 'energetic', 'confident', 'relieved',
-                'content', 'peaceful', 'calm', 'serene', 'glad', 'pleased',
-                'hopeful', 'optimistic', 'inspired', 'motivated'
-            ],
-            # Priority 6: Gratitude
-            'grateful': [
-                'thank', 'thanks', 'thank you', 'tysm', 'ty', 'appreciate', 
-                'you helped', 'feel better'
-            ],
-            # Priority 7: Goodbye
-            'goodbye': [
-                'bye', 'goodbye', 'see you', 'talk later', 'gotta go'
-            ],
-            # Priority 8: Greeting
-            'greeting': [
-                'hi', 'hello', 'hey', 'good morning', 'good afternoon', 'good evening'
-            ]
+        # Model context windows
+        self.MODEL_CONTEXT_WINDOWS = {
+            'llama-3.3-70b-versatile': 131072,  # 128k
+            'llama-3.2-90b': 131072,  # 128k
+            'mixtral-8x7b-32768': 32768,  # 32k
+            'gemma2-9b': 8192,  # 8k
         }
-
-    def _initialize_coping_strategies(self):
-        """Initialize evidence-based coping strategies by mood type"""
-        return {
-            'anxious': [
-                "Try the 5-4-3-2-1 grounding technique: Name 5 things you see, 4 you can touch, 3 you hear, 2 you smell, and 1 you taste.",
-                "Practice box breathing: Breathe in for 4 counts, hold for 4, exhale for 4, hold for 4. Repeat 4 times.",
-            ],
-            'sad': [
-                "Reach out to someone you trust, even if it's just a text saying 'I'm having a hard day.'",
-                "Do something small for your future self: Drink water, make your bed, or prep tomorrow's outfit.",
-            ],
-            'stressed': [
-                "Make a quick list: What must be done today? What can wait? What can you delegate?",
-                "Take a 5-minute break to do something completely unrelated—stretch, walk around, or look outside.",
-            ],
-            'angry': [
-                "Channel your energy physically: Do jumping jacks, punch a pillow, or go for a brisk walk.",
-                "Write an angry letter you'll never send. Get it all out, then tear it up or delete it.",
-            ],
-            'lonely': [
-                "Reach out to someone, even if it's been a while. A simple 'thinking of you' message can help.",
-                "Join an online community around an interest you have. Shared interests create connections.",
-            ],
-            'tired': [
-                "Honor your tiredness. Take a 20-minute power nap if possible, or rest without screens.",
-                "Check your basics: When did you last eat? Are you hydrated?",
-            ],
-            'overwhelmed': [
-                "Do a brain dump: Write down everything on your mind, then pick just ONE thing to address now.",
-                "Use the 'next right thing' approach: Just identify the very next small step and do only that.",
-            ]
-        }
-
+    
     def get_conversation_history(self, user_id):
         """Get conversation history for a specific user"""
         if user_id not in self.conversation_histories:
@@ -118,397 +39,614 @@ class GroqService:
         return self.conversation_histories[user_id]
     
     def add_to_history(self, user_id, role, message):
-        """Add a message to conversation history"""
+        """Add a message to conversation history with INCREASED storage"""
         history = self.get_conversation_history(user_id)
-        history.append({
-            "role": role, 
-            "message": message,
-            "timestamp": datetime.now().isoformat()
-        })
-        # Keep only last 20 messages (10 exchanges) to avoid token limits
-        if len(history) > 20:
-            self.conversation_histories[user_id] = history[-20:]
+        history.append({"role": role, "message": message})
+        # CHANGED: Keep last 40 exchanges (80 messages) instead of 20
+        # This ensures better memory across longer conversations
+        if len(history) > 80:
+            self.conversation_histories[user_id] = history[-80:]
     
     def clear_history(self, user_id):
         """Clear conversation history for a user"""
         if user_id in self.conversation_histories:
             self.conversation_histories[user_id] = []
     
-    def track_user_pattern(self, user_id, mood, intensity):
-        """Track user mood patterns for insights"""
-        if user_id not in self.user_patterns:
-            self.user_patterns[user_id] = []
+    def _estimate_tokens(self, text):
+        """Rough estimate of token count (1 token ≈ 4 characters for English)"""
+        return len(text) // 4
+    
+    def _calculate_smart_max_tokens(self, messages, sentiment):
+        """Calculate optimal max_tokens based on context and sentiment"""
         
-        self.user_patterns[user_id].append({
-            'mood': mood,
-            'intensity': intensity,
-            'timestamp': datetime.now()
-        })
+        # Get model context window
+        context_window = 32768  # Default fallback
+        for model_name, window in self.MODEL_CONTEXT_WINDOWS.items():
+            if model_name in self.model.lower():
+                context_window = window
+                break
         
-        # Keep only last 30 days of patterns
-        cutoff = datetime.now() - timedelta(days=30)
-        self.user_patterns[user_id] = [
-            p for p in self.user_patterns[user_id] 
-            if p['timestamp'] > cutoff
+        # Estimate total tokens in current conversation
+        total_context_tokens = 0
+        for message in messages:
+            total_context_tokens += self._estimate_tokens(message["content"])
+        
+        # Leave buffer for safety (10% of context window or 2000 tokens, whichever is smaller)
+        safety_buffer = min(2000, int(context_window * 0.1))
+        
+        # Available tokens for response
+        available_tokens = context_window - total_context_tokens - safety_buffer
+        
+        # Sentiment-based optimal ranges (UPDATED for mixed emotions and summaries)
+        sentiment_ranges = {
+            'negative': (800, 1500),      # More space for deep empathy
+            'struggling': (600, 1200),    # Directional but concise
+            'positive': (400, 800),       # Shorter for positive moods
+            'mixed': (700, 1400),         # For complex emotions
+            'neutral': (600, 1000),       # Balanced
+            'grateful': (300, 600),       # Short for thanks
+            'goodbye': (300, 600),        # Short for farewells
+            'greeting': (400, 700),       # Medium for greetings
+            'creator': (500, 800),        # Medium for creator questions
+            'summary': (800, 1500),       # NEW: More space for summaries
+            'default': (500, 1000)        # Default range
+        }
+        
+        min_tokens, max_tokens = sentiment_ranges.get(sentiment, (500, 1000))
+        
+        # Ensure we're within available tokens and sensible range
+        calculated_max = min(available_tokens, max_tokens)
+        calculated_max = max(min_tokens, calculated_max)  # Ensure minimum
+        
+        # Never exceed 2000 tokens for emotional support chat
+        calculated_max = min(calculated_max, 2000)
+        
+        logger.info(f"Token calculation: sentiment={sentiment}, context_tokens={total_context_tokens}, "
+                   f"available={available_tokens}, final_max={calculated_max}")
+        
+        return calculated_max
+    
+    def _clean_response_text(self, text):
+        """Clean response text while preserving natural flow"""
+        if not text:
+            return ""
+        
+        # Remove bullet points at start of lines
+        lines = text.split('\n')
+        cleaned_lines = []
+        
+        for line in lines:
+            # Remove common bullet markers at line start
+            line = line.lstrip('•-*◦‣⁃⁌⁍⦁⦾⦿')
+            
+            # Remove numbered bullets like "1.", "2." at start
+            if line and line[0].isdigit() and len(line) > 1 and line[1] in '. )':
+                line = line[2:].lstrip()
+            
+            # Replace colons that end sentences (but not in time or ratios)
+            if line.strip().endswith(':'):
+                # Check if it's likely a sentence-ending colon
+                last_word = line.strip().split()[-1] if line.strip().split() else ""
+                if last_word and not last_word.replace(':', '').isdigit():  # Not a time like "12:30"
+                    line = line.rstrip(':') + '.'
+            
+            cleaned_lines.append(line)
+        
+        # Join back
+        cleaned_text = '\n'.join(cleaned_lines)
+        
+        # Remove multiple newlines
+        cleaned_text = re.sub(r'\n{3,}', '\n\n', cleaned_text)
+        
+        # Remove standalone bullet characters in the middle of text
+        cleaned_text = re.sub(r'\s+[•\-*]\s+', ' ', cleaned_text)
+        
+        # Ensure proper punctuation
+        if cleaned_text and not cleaned_text.endswith(('.', '!', '?', '"', "'")):
+            cleaned_text = cleaned_text.rstrip() + '.'
+        
+        # Remove excessive spaces
+        cleaned_text = re.sub(r'\s+', ' ', cleaned_text)
+        
+        return cleaned_text.strip()
+    
+    def _optimize_response_length(self, text, sentiment):
+        """Ensure response isn't too long or too short"""
+        if not text:
+            return text
+        
+        word_count = len(text.split())
+        
+        # Ideal word ranges per sentiment (UPDATED)
+        ideal_ranges = {
+            'negative': (60, 250),     # More detailed for negative emotions
+            'struggling': (50, 180),   # Concise but helpful for direction
+            'positive': (30, 120),     # Shorter for positive moods
+            'mixed': (60, 220),        # For complex emotions
+            'neutral': (40, 150),      # Balanced for neutral
+            'grateful': (20, 80),      # Short for thanks
+            'goodbye': (15, 60),       # Short for farewells
+            'greeting': (20, 80),      # Medium for greetings
+            'creator': (40, 120),      # Medium for creator questions
+            'summary': (80, 300),      # NEW: Longer for summaries
+            'default': (40, 150)       # Default range
+        }
+        
+        min_words, max_words = ideal_ranges.get(sentiment, (40, 150))
+        
+        if word_count < min_words:
+            # Response is too short - could indicate truncation
+            logger.warning(f"Response too short ({word_count} words) for sentiment {sentiment}")
+            return text
+        
+        elif word_count > max_words:
+            # Response is too long - trim gracefully at sentence boundary
+            logger.info(f"Trimming response from {word_count} to approx {max_words} words")
+            sentences = re.split(r'(?<=[.!?])\s+', text)
+            trimmed = []
+            current_words = 0
+            
+            for sentence in sentences:
+                sentence_words = len(sentence.split())
+                if current_words + sentence_words <= max_words:
+                    trimmed.append(sentence)
+                    current_words += sentence_words
+                else:
+                    # Try to complete the last sentence if we're close
+                    if current_words < min_words * 0.8:  # If we're well below minimum
+                        trimmed.append(sentence)
+                    break
+            
+            text = ' '.join(trimmed)
+            
+            # Ensure it ends with proper punctuation
+            if not text.endswith(('.', '!', '?')):
+                text = text.rstrip() + '.'
+        
+        return text
+    
+    def is_summary_request(self, message):
+        """Check if the user is asking for a conversation summary"""
+        lower_message = message.lower().strip()
+        
+        summary_keywords = [
+            'summarize', 'summary', 'sum up', 'recap', 'review',
+            'what did we talk about', 'what have we discussed',
+            'remind me what', 'go over what', 'overview of our',
+            'what did i say', 'what did i tell you', 'our conversation'
         ]
-    
-    def get_personalized_insights(self, user_id):
-        """Generate insights based on user patterns"""
-        if user_id not in self.user_patterns or not self.user_patterns[user_id]:
-            return None
         
-        patterns = self.user_patterns[user_id]
-        recent_patterns = [p for p in patterns if p['timestamp'] > datetime.now() - timedelta(days=7)]
-        
-        if not recent_patterns:
-            return None
-        
-        # Analyze patterns
-        moods = [p['mood'] for p in recent_patterns]
-        avg_intensity = sum(p['intensity'] for p in recent_patterns) / len(recent_patterns)
-        most_common_mood = max(set(moods), key=moods.count)
-        
-        insights = {
-            'most_common_mood': most_common_mood,
-            'average_intensity': round(avg_intensity, 1),
-            'total_checkins': len(recent_patterns),
-            'trend': self._analyze_trend(recent_patterns)
-        }
-        
-        return insights
-    
-    def _analyze_trend(self, patterns):
-        """Analyze if mood is improving, worsening, or stable"""
-        if len(patterns) < 3:
-            return 'insufficient_data'
-        
-        recent = patterns[-3:]
-        intensities = [p['intensity'] for p in recent]
-        
-        # Simple trend analysis
-        if intensities[-1] < intensities[0] - 2:
-            return 'improving'
-        elif intensities[-1] > intensities[0] + 2:
-            return 'worsening'
-        else:
-            return 'stable'
-    
-    def get_coping_strategy(self, mood, user_id=None):
-        """Get a personalized coping strategy based on mood"""
-        mood_mapping = {
-            'anxious': 'anxious',
-            'stressed': 'stressed',
-            'sad': 'sad',
-            'angry': 'angry',
-            'lonely': 'lonely',
-            'tired': 'tired',
-            'overwhelmed': 'overwhelmed'
-        }
-        
-        category = mood_mapping.get(mood.lower(), 'stressed')
-        strategies = self.coping_strategies.get(category, self.coping_strategies['stressed'])
-        
-        return random.choice(strategies)
+        return any(keyword in lower_message for keyword in summary_keywords)
     
     def is_emotional_support_topic(self, message):
-        """Determines if the message is seeking emotional support"""
-        lower_message = message.lower()
+        """Determines if the message is seeking emotional support, including general guidance/overwhelm."""
+        lower_message = message.lower().strip()
         
-        # Technical/Non-emotional keyword exclusion
-        clear_non_emotional = [
-            'code', 'python', 'javascript', 'programming', 'function', 'algorithm', 
-            'debug', 'error', 'bug', 'api', 'database', 'html', 'css', 'server', 
-            'website', 'app', 'software',
-            'solve for', 'formula', 'calculate', 'math problem', 'physics', 'chemistry', 
-            'explain the concept of', 'business plan', 'marketing strategy', 
-            'resume advice', 'stock market', 'legal advice', 'medical diagnosis'
-        ]
-        if any(non_emo in lower_message for non_emo in clear_non_emotional):
-            return False
-
-        detected_intents = self._match_intent_keywords(message)
-        
-        if detected_intents:
+        # Check if it's a summary request first
+        if self.is_summary_request(message):
             return True
+        
+        # --- PRIORITY: Crisis situations (self-harm, harm to others) ---
+        # REFINED: Removed generic pregnancy keywords, kept only explicit harm scenarios
+        crisis_situations = [
+            # Self-harm and suicide
+            'kill myself', 'hurt myself', 'end my life', 'suicide', 'suicidal',
+            'self harm', 'self-harm', 'cut myself', 'overdose',
+            # Harm to others
+            'kill someone', 'hurt someone', 'harm someone', 'attack someone',
+            'murder', 'shoot', 'stab', 'strangle', 'beat up',
+            'should i kill', 'should we kill', 'thinking about killing',
+            'want to kill', 'going to kill', 'how to kill',
+            # Pregnancy-related HARM only (not just pregnancy itself)
+            'kill the baby', 'harm the baby', 'hurt the baby'
+        ]
+        
+        if any(phrase in lower_message for phrase in crisis_situations):
+            return True
+        
+        # --- Creator Questions (About the developers) ---
+        creator_questions = [
+            'who made you', 'who created you', 'who developed you',
+            'who built you', 'who programmed you', 'who designed you',
+            'your creator', 'your developer', 'your maker',
+            'who are your creators', 'who are your developers',
+            'made by', 'created by', 'developed by'
+        ]
+        
+        if any(phrase in lower_message for phrase in creator_questions):
+            return True
+        
+        # --- Gratitude & Casual Conversation (Part of emotional support) ---
+        gratitude_casual = [
+            'thank', 'thanks', 'thank you', 'tysm', 'ty',
+            'appreciate', 'grateful', 'you helped', 'you\'re helpful',
+            'that helps', 'that helped', 'feel better',
+            'bye', 'goodbye', 'see you', 'talk later', 'gotta go',
+            'hi', 'hello', 'hey', 'good morning', 'good afternoon', 'good evening'
+        ]
+        
+        if any(phrase in lower_message for phrase in gratitude_casual):
+            return True
+        
+        # --- Core Emotional Distress & Guidance Seeking ---
+        emotional_distress_signals = [
+            # Core emotional states
+            'broken', 'shattered', 'lost', 'empty', 'numb',
+            'drowning', 'drowning in', 'can\'t breathe', "can't breathe",
+            'falling apart', 'falling to pieces', 'coming apart',
             
-        # Fallback personal reference check
+            # Pain expressions
+            'hurting', 'in pain', 'my heart hurts', 'heart is broken',
+            'emotional pain', 'mental pain', 'suffering',
+            
+            # Overwhelm/Guidance seeking (INCLUDING PREGNANCY DECISIONS)
+            'overwhelmed', 'can\'t cope', "can't cope", 'can\'t handle', "can't handle",
+            'too much', 'too hard', 'can\'t take it', "can't take it",
+            'what to do', 'what should i do', 'what should we do', 'how should i', 'how to face',
+            'how to start', 'how to get through', 'i need direction', 'i need motivation',
+            'pregnant', 'pregnancy', 'expecting', 'having a baby',
+            # Pregnancy decision-making (seeking support, not harm)
+            'should we abort', 'should i abort', 'abortion decision',
+            'should we keep', 'should i keep', 'what about the baby',
+            
+            # Loneliness/isolation
+            'alone', 'lonely', 'no one understands', 'no one gets it',
+            'isolated', 'disconnected',
+            
+            # Existential
+            'lost hope', 'no hope', 'hopeless', 'nothing matters',
+            'what\'s the point', "what's the point", 'why bother',
+            
+            # Crisis indicators
+            'want to die', 'end it all', 'give up'
+        ]
+        
+        if any(signal in lower_message for signal in emotional_distress_signals):
+            return True
+        
+        # --- Emotional Words with Personal Context ---
+        emotional_words = [
+            'sad', 'depressed', 'anxious', 'stressed', 'worried', 'angry',
+            'frustrated', 'lonely', 'hurt', 'pain', 'bad', 'terrible', 'awful',
+            'hate', 'scared', 'fear', 'exhausted', 'hopeless',
+            'useless', 'worthless', 'cry', 'crying', 'tears', 'miserable',
+            'heartbroken', 'grieving', 'devastated', 'tragic', 'upset',
+            'happy', 'excited', 'joyful', 'grateful', 'proud', 'relieved',
+            'nervous', 'tense', 'on edge', 'panic', 'panicking',
+            'guilty', 'conflicted', 'torn', 'confused about feeling'
+        ]
+        
+        emotional_expressions = [
+            'i feel', 'im feeling', "i'm feeling", 'i am feeling',
+            'feeling like', 'feeling so', 'feeling really', 'feeling very',
+            'i am', 'im so', "i'm so", 'so i', 'really i',
+            'my heart', 'my mind', 'my soul', 'my spirit',
+            'cant stop', "can't stop", 'always feeling', 'keep feeling'
+        ]
+        
+        has_emotional_words = any(word in lower_message for word in emotional_words)
+        has_emotional_expressions = any(expr in lower_message for expr in emotional_expressions)
+        
         has_personal_reference = any(pronoun in lower_message for pronoun in [
             'i ', 'im ', "i'm ", 'my ', 'me ', 'myself',
             'i am ', 'i feel', 'i need', 'i want', 'i cant', "i can't"
         ])
-
-        return has_personal_reference
-    
-    def analyze_sentiment(self, message, user_id=None):
-        """Analyze sentiment with optional conversation context"""
-        detected = self._match_intent_keywords(message)
         
-        # Check for continuation of emotional conversation
-        if user_id and user_id in self.conversation_histories:
-            history = self.conversation_histories[user_id]
-            if history:
-                # Get last assistant message
-                last_assistant_msg = None
-                for entry in reversed(history):
-                    if entry["role"] == "assistant":
-                        last_assistant_msg = entry["message"].lower()
-                        break
-                
-                # If last assistant was discussing emotional topic, continue it
-                if last_assistant_msg and any(emotion_word in last_assistant_msg 
-                                            for emotion_word in ['feel', 'emotional', 'tough', 'hard', 'difficult', 'struggl', 'guilt', 'regret', 'sorry']):
-                    # Check if current message continues with pronouns, references, or reply-related words
-                    lower_msg = message.lower()
-                    
-                    # Check for continuation keywords
-                    continuation_keywords = [
-                        'they', 'them', 'their', 'he', 'she', 'it', 'this', 'that',
-                        'reply', 'respond', 'answer', 'message', 'text', 'call',
-                        'group', 'friend', 'capstone', 'project', 'team'
-                    ]
-                    
-                    # Check if any continuation keyword appears as a whole word
-                    import re
-                    if any(re.search(r'\b' + keyword + r'\b', lower_msg) for keyword in continuation_keywords):
-                        # This is likely continuing the previous emotional conversation
-                        return 'negative'
+        if (has_emotional_words or has_emotional_expressions) and has_personal_reference:
+            return True
         
-        # Original logic continues...
-        for intent_type in self.intent_map.keys():
-            if intent_type == 'negative':
-                lower_message = message.lower()
-                struggle_keywords = [
-                    'what to do', 'what should i do', 'how to face', 'how to start',
-                    'how to get through', 'i need direction', 'i need motivation',
-                    'i dont know', "i don't know", 'lost', 'confused', 'stuck',
-                    'what now', 'what next', 'how can i', 'why do i feel'
-                ]
-                
-                if any(phrase in lower_message for phrase in struggle_keywords) and 'negative' not in detected:
-                    return 'struggling'
-                
-                if intent_type in detected:
-                    return intent_type
+        # --- Reject Non-Emotional Content ---
+        clear_non_emotional = [
+            # Technical/Programming/Academic
+            'code', 'python', 'javascript', 'programming', 'function',
+            'algorithm', 'debug', 'error', 'bug', 'api', 'database',
+            'html', 'css', 'server', 'website', 'app', 'software', 
+            'assignment', 'homework', 'project', 'solve for', 'formula', 'calculate', 
+            'math', 'physics', 'chemistry', 'explain the concept of',
             
-            elif intent_type in detected:
-                return intent_type
+            # Work/Finance/Legal
+            'business plan', 'marketing strategy', 'resume advice', 'stock market', 
+            'legal advice', 'medical diagnosis', 'sue someone', 
+            
+            # General Knowledge/How-to
+            'what is', 'who is', 'when was', 'where is', 'define', 'history of', 
+            'how to make', 'how to build', 'how to cook', 'how to fix',
+            'write a story', 'write a poem', 'movie review', 'tv show',
+            
+            # Testing
+            'hello world', 'test test', 'ignore previous', 'what can you do', 'your purpose' 
+        ]
         
-        # Check for simple greeting
-        if 'greeting' in detected and len(message.lower().split()) <= 3:
+        if any(non_emo in lower_message for non_emo in clear_non_emotional):
+            return False
+        
+        if len(lower_message.split()) <= 5 and has_personal_reference:
+            return True
+        
+        return has_personal_reference
+
+    def analyze_sentiment(self, message):
+        """Analyze sentiment with IMPROVED detection of mixed emotions and summaries."""
+        lower_message = message.lower()
+        
+        # --- CHECK FOR SUMMARY REQUEST FIRST ---
+        if self.is_summary_request(message):
+            return 'summary'
+        
+        # --- PRIORITY: REFINED Crisis Situations (harm-focused only) ---
+        crisis_keywords = [
+            # Self-harm and suicide
+            'suicide', 'suicidal', 'kill myself', 'end my life', 'want to die',
+            'harm myself', 'hurt myself', 'self harm', 'self-harm', 'cut myself',
+            'better off dead', 'no reason to live', 'can\'t go on', 'end it all',
+            'overdose', 'jump off',
+            # Harm to others
+            'hurt someone', 'kill someone', 'attack someone', 'murder',
+            'shoot someone', 'stab someone', 'harm others', 'violence',
+            'should i kill', 'should we kill', 'thinking about killing',
+            'want to kill', 'going to kill', 'how to kill',
+            # Pregnancy-related HARM only (not general pregnancy discussion)
+            'kill the baby', 'harm the baby', 'hurt the baby',
+            # General severe crisis
+            'ending things', 'ending it all'
+        ]
+        
+        if any(phrase in lower_message for phrase in crisis_keywords):
+            return 'crisis'
+        
+        # --- Creator Questions ---
+        creator_keywords = [
+            'who made you', 'who created you', 'who developed you',
+            'who built you', 'who programmed you', 'who designed you',
+            'your creator', 'your developer', 'your maker',
+            'who are your creators', 'who are your developers',
+            'made by', 'created by', 'developed by'
+        ]
+        
+        if any(phrase in lower_message for phrase in creator_keywords):
+            return 'creator'
+        
+        # --- Gratitude/Positive Closings ---
+        gratitude_patterns = [
+            r'\bthank\b', r'\bthanks\b', r'\bthank you\b', r'\btysm\b', r'\bty\b',
+            r'\bappreciate\b', r'\bgrateful\b', r'\byou helped\b', r'\bfeel better\b'
+        ]
+        
+        goodbye_patterns = [r'\bbye\b', r'\bgoodbye\b', r'\bsee you\b', r'\btalk later\b', r'\bgotta go\b']
+        
+        is_grateful = any(re.search(pattern, lower_message) for pattern in gratitude_patterns)
+        is_goodbye = any(re.search(pattern, lower_message) for pattern in goodbye_patterns)
+        
+        if is_grateful:
+            return 'grateful'
+        
+        if is_goodbye:
+            return 'goodbye'
+        
+        # --- Greetings ---
+        greeting_keywords = ['hi', 'hello', 'hey', 'good morning', 'good afternoon', 'good evening']
+        
+        if any(phrase in lower_message for phrase in greeting_keywords) and len(lower_message.split()) <= 3:
             return 'greeting'
         
-        return 'neutral'
+        # --- NEW: MIXED EMOTIONS DETECTION ---
+        mixed_emotion_indicators = [
+            'but', 'however', 'on the other hand', 'at the same time',
+            'even though', 'although', 'guilty but', 'happy but',
+            'sad but', 'conflicted', 'torn between', 'mixed feelings'
+        ]
+        
+        has_mixed_indicator = any(phrase in lower_message for phrase in mixed_emotion_indicators)
+        
+        # Negative emotion words
+        negative_keywords = [
+            'guilty', 'shame', 'regret', 'broken', 'shattered', 'drowning', 
+            'falling apart', 'hurting', 'pain', 'suffering', 'overwhelmed', 
+            'cant cope', "can't cope", 'cant handle', 'lonely', 'isolated', 
+            'hopeless', 'sad', 'depressed', 'anxious', 'stressed', 'worried', 
+            'angry', 'frustrated', 'hurt', 'bad', 'terrible', 'awful',
+            'hate', 'scared', 'fear', 'exhausted', 'useless', 'worthless', 
+            'cry', 'crying', 'miserable', 'heartbroken', 'grieving', 
+            'devastated', 'upset', 'nervous', 'tense', 'panic'
+        ]
+        
+        # Positive emotion words
+        positive_keywords = [
+            'happy', 'good', 'great', 'amazing', 'wonderful', 'love', 'excited',
+            'grateful', 'awesome', 'fantastic', 'brilliant', 'excellent',
+            'proud', 'joyful', 'energetic', 'confident', 'relieved',
+            'content', 'peaceful', 'calm', 'serene', 'glad', 'pleased',
+            'hopeful', 'optimistic', 'inspired', 'motivated', 'grow', 'growth'
+        ]
+        
+        has_negative = any(word in lower_message for word in negative_keywords)
+        has_positive = any(word in lower_message for word in positive_keywords)
+        
+        # If message has BOTH positive and negative emotions, it's mixed
+        if has_mixed_indicator or (has_negative and has_positive):
+            return 'mixed'
+        
+        # --- Struggling/Guidance-Seeking (INCLUDING PREGNANCY DECISIONS) ---
+        struggle_keywords = [
+            'what to do', 'what should i do', 'what should we do', 'how to face', 'how to start',
+            'how to get through', 'i need direction', 'i need motivation', 'need advice',
+            'i dont know', "i don't know", 'lost', 'confused', 'stuck',
+            'what now', 'what next', 'how can i', 'why do i feel',
+            'pregnant', 'pregnancy', 'expecting', 'having a baby',
+            # Pregnancy decision keywords (NOT crisis, but guidance-seeking)
+            'should we abort', 'should i abort', 'should we keep',
+            'abort the baby', 'keep the baby', 'abortion', 'terminate',
+            'what about the baby', 'what to do about', 'give me advice'
+        ]
+        
+        if any(phrase in lower_message for phrase in struggle_keywords):
+            return 'struggling'
 
-    def generate_response(self, user_message, sentiment, user_id=None, mood=None, intensity=None):
-        """Generate comprehensive emotional support responses"""
+        # Single emotion detection
+        if has_negative:
+            return 'negative'
+            
+        if has_positive:
+            return 'positive'
+        
+        return 'neutral'
+    
+    def generate_response(self, user_message, sentiment, user_id=None, conversation_context=None):
+        """Generate natural emotional support responses with conversation memory"""
         try:
+            # Use user_id for tracking (default to 'default' if not provided)
             if user_id is None:
                 user_id = 'default'
             
-            # Get conversation history first
-            history = self.get_conversation_history(user_id)
+            # REFINED: Check for harm-focused crisis keywords only
+            lower_msg = user_message.lower()
+            harm_crisis_keywords = [
+                'kill myself', 'hurt myself', 'suicide', 'suicidal', 'end my life',
+                'kill someone', 'hurt someone', 'kill the baby', 'harm the baby',
+                'murder', 'harm someone', 'should i kill', 'should we kill',
+                'want to kill', 'going to kill', 'thinking about killing',
+                'how to kill', 'shoot', 'stab', 'attack someone'
+            ]
             
-            # Add 'advice_seeking' to special_sentiments
-            special_sentiments = ['crisis', 'creator', 'grateful', 'goodbye', 'greeting', 'advice_seeking']
+            if any(keyword in lower_msg for keyword in harm_crisis_keywords):
+                response = self._get_crisis_response()
+                self.add_to_history(user_id, "user", user_message)
+                self.add_to_history(user_id, "assistant", response)
+                return response
             
-            # Check if this is truly a new greeting or continuation of conversation
-            if sentiment == 'greeting' and history:
-                # Get last few messages to check context
-                recent_msgs = history[-4:] if len(history) >= 4 else history
-                
-                # Check if last exchange was within last few minutes and emotional
-                if recent_msgs:
-                    last_timestamp = datetime.fromisoformat(recent_msgs[-1]["timestamp"])
-                    time_diff = datetime.now() - last_timestamp
-                    
-                    # If last message was recent (within 5 minutes) and emotional, continue conversation
-                    if time_diff < timedelta(minutes=5):
-                        # Check if last assistant message was emotional
-                        last_assistant_msg = None
-                        for entry in reversed(history):
-                            if entry["role"] == "assistant":
-                                last_assistant_msg = entry["message"].lower()
-                                break
-                        
-                        # If we were just talking about something emotional, don't treat as new greeting
-                        if last_assistant_msg and any(word in last_assistant_msg for word in 
-                                                    ['feel', 'emotional', 'tough', 'hard', 'struggle', 'dilemma', 'guilt']):
-                            # Override sentiment to continue conversation
-                            sentiment = 'negative'  # or re-analyze with context
+            # Handle special sentiments with predefined responses (skip Groq API)
+            special_sentiments = ['crisis', 'creator', 'grateful', 'goodbye', 'greeting']
             
             if sentiment in special_sentiments:
                 if sentiment == 'crisis':
                     response = self._get_crisis_response()
-                elif sentiment == 'advice_seeking':
-                    response = self._handle_advice_request(user_message, user_id, mood)
                 else:
                     response = self._get_fallback_response(sentiment)
                 self.add_to_history(user_id, "user", user_message)
                 self.add_to_history(user_id, "assistant", response)
                 return response
             
-            # For emotional support topics, use Groq API (not fallback)
+            # For emotional support topics (including summaries), use Groq API
             if self.client and self.is_emotional_support_topic(user_message):
-                # Check if previous assistant message was advice; if yes, continue the conversation
-                if history and history[-1]["role"] == "assistant":
-                    last_msg = history[-1]["message"]
-                    if any(word in last_msg.lower() for word in ['advice', 'support', 'guidance', 'encouragement']):
-                        # Continue the conversation naturally
-                        response = self._generate_groq_response(user_message, sentiment, user_id, mood)
-                    else:
-                        response = self._generate_groq_response(user_message, sentiment, user_id, mood)
-                else:
-                    response = self._generate_groq_response(user_message, sentiment, user_id, mood)
-
+                response = self._generate_groq_response(user_message, sentiment, user_id)
+                self.add_to_history(user_id, "user", user_message)
+                self.add_to_history(user_id, "assistant", response)
+                return response
+            else:
+                if not self.is_emotional_support_topic(user_message):
+                    response = self._get_gentle_guidance(user_message)
+                    self.add_to_history(user_id, "user", user_message)
+                    self.add_to_history(user_id, "assistant", response)
+                    return response
+                response = self._get_fallback_response(sentiment)
                 self.add_to_history(user_id, "user", user_message)
                 self.add_to_history(user_id, "assistant", response)
                 return response
         
         except Exception as e:
             logger.error(f"Error generating response: {e}")
-            traceback.print_exc()
             response = self._get_fallback_response(sentiment)
             return response
     
-    def _handle_advice_request(self, user_message, user_id, mood=None):
-        """Handle explicit requests for advice or help with tasks using Groq for dynamic responses"""
-        lower_msg = user_message.lower()
-
-        # Detect mood if not provided
-        mood_keywords = {
-            'anxious': ['anxiety', 'anxious', 'worried', 'nervous', 'panicking'],
-            'sad': ['sad', 'depression', 'depressed', 'down', 'blue', 'empty'],
-            'stressed': ['stress', 'stressed', 'overwhelmed', 'pressure', 'burnout'],
-            'angry': ['anger', 'angry', 'mad', 'furious', 'frustrated'],
-            'lonely': ['lonely', 'alone', 'isolated'],
-            'tired': ['tired', 'exhausted', 'drained', 'sleepy'],
-        }
-
-        detected_mood = mood
-        if not detected_mood:
-            for mood_type, keywords in mood_keywords.items():
-                if any(keyword in lower_msg for keyword in keywords):
-                    detected_mood = mood_type
-                    break
-
-        # Check if user is asking about academic/work tasks
-        academic_keywords = ['assignment', 'homework', 'project', 'study', 'exam', 'test']
-        is_academic = any(word in lower_msg for word in academic_keywords)
-
-        # Check for day-related questions
-        day_related = [
-            'go on my day', 'go on with my day', 'get through the day',
-            'how should i go on my day', 'my day', 'today feels hard'
-        ]
-        is_day_focus = any(phrase in lower_msg for phrase in day_related)
-
-        # Prepare context for Groq
-        prompt_parts = []
-        if detected_mood:
-            prompt_parts.append(f"The user is feeling {detected_mood}.")
-        if is_academic:
-            mentioned_items = [w for w in academic_keywords if w in lower_msg]
-            topic = mentioned_items[0] if mentioned_items else "their task"
-            prompt_parts.append(f"They are asking for advice related to {topic}.")
-        if is_day_focus:
-            prompt_parts.append("They are trying to get through their day and want guidance.")
-
-        context_prompt = " ".join(prompt_parts)
-        full_prompt = f"""
-            You are Calmi, a warm, practical, and empathetic AI mental wellness companion.
-            User said: "{user_message}"
-            Context: {context_prompt}
-            Provide a supportive, encouraging, and actionable response. 
-            Include gentle advice, validation of their feelings, and practical tips they can apply immediately. 
-            Use a natural, flowing style (complete sentences, warm tone). 
-            End by asking a follow-up question to continue the conversation.
-            """
-
-        # Call Groq API
-        if self.client:
-            return self._generate_groq_response(user_message=full_prompt, sentiment='advice_seeking', user_id=user_id, mood=detected_mood)
-        
-        # Fallback if Groq is unavailable
-        return (
-            "I hear that you're seeking advice. It's okay to feel the way you do. "
-            "Take a moment, breathe, and try to focus on one small step you can take right now. "
-            "What part feels the heaviest for you today?"
-        )
-
-
-    def _generate_groq_response(self, user_message, sentiment, user_id, mood=None):
-        """Generate response using Groq with conversation context"""
+    def _generate_groq_response(self, user_message, sentiment, user_id):
+        """Generate response using Groq with FULL conversation context"""
         try:
             # Get conversation history
             history = self.get_conversation_history(user_id)
             
-            # Get user insights
-            insights = self.get_personalized_insights(user_id)
-            insights_text = ""
-            if insights:
-                insights_text = f" Recently feeling {insights['most_common_mood']} (avg intensity: {insights['average_intensity']}/10)."
+            # --- UPDATED System Prompt with Summary Support ---
+            system_prompt = """You are Calmi, a warm, supportive, and **grounded** emotional companion. You only provide emotional support.
+
+**CRITICAL SAFETY PROTOCOL:**
+If the user mentions wanting to harm themselves, harm others, or asks about killing anyone (including "the baby", a fetus, or any person), you MUST respond with:
+"I hear that you're in a very serious situation that requires immediate professional help. Please contact the National Center for Mental Health at 1553 or HOPELINE PH at 0917-558-4673 right away. If there's immediate danger, call 911 or go to the nearest hospital. This is beyond what I can safely help with, and trained professionals need to support you through this."
+
+For all other conversations, respond naturally as a caring friend would. Use complete sentences that flow smoothly. Do not use colons, bullet points, or lists. Just write flowing, natural paragraphs.
+
+**CRITICAL: YOU HAVE FULL ACCESS TO THE ENTIRE CONVERSATION HISTORY. Reference previous messages, names, situations, and topics they've shared. Show continuity and demonstrate you remember everything they've told you.**
+
+**WHEN ASKED TO SUMMARIZE:**
+If the user asks you to summarize or recap the conversation, provide a thoughtful, compassionate summary that:
+1. Captures the key topics and emotions they've shared
+2. Shows you remember the details and context
+3. Acknowledges the challenges they're facing
+4. Ends with a supportive question about how they're feeling now
+
+**WHEN ASKED ABOUT PREGNANCY DECISIONS (abortion, keeping baby, etc.):**
+NEVER provide medical advice or tell them what to do. Instead:
+1. Validate how overwhelming and difficult this decision must be
+2. Acknowledge that this is THEIR decision to make with their girlfriend
+3. Gently encourage them to talk with trusted adults (parents, school counselor, healthcare provider)
+4. Offer emotional support for processing their feelings
+5. Example: "This is such a significant decision, and it makes sense that you're looking for guidance. While I can't tell you what to do, I can support you emotionally through this. Have you been able to talk with any trusted adults who could help you think through all your options?"
+
+Focus on:
+1. **Validating their feelings** (using appropriate intensity based on sentiment).
+2. **Showing genuine empathy** and presence.
+3. **ALWAYS referencing previous context** from earlier in the conversation when relevant.
+4. **Offering gentle, actionable next steps** or self-compassion.
+
+Tailor the tone based on the user's sentiment:
+* **'negative'**: Use **deep empathy**, validation of pain, and gentle acceptance. Reference any previous context they shared.
+* **'struggling'**: Use a **motivational, directional, and high-agency tone**. Focus on small, manageable actions. Keep the tone light, encouraging, and respectful. For pregnancy and difficult life decisions (including questions about abortion or keeping a baby), validate the complexity, acknowledge this is THEIR decision, gently suggest talking to trusted adults, and support their autonomy. Never tell them what to do, but provide emotional support through the decision-making process.
+* **'positive'**: Acknowledge and encourage savoring the good mood.
+* **'mixed'**: THIS IS CRITICAL. When someone expresses BOTH positive and negative emotions (e.g., "guilty but happy"), validate BOTH feelings equally. Acknowledge the complexity: "It makes complete sense that you'd feel both guilty and happy at the same time..." Don't dismiss either emotion. Help them see that conflicting feelings are normal and valid.
+* **'summary'**: Provide a compassionate, detailed summary of what they've shared, showing you remember and care.
+
+No advice about non-emotional topics. Always be a friend, never a therapist.
+
+Respond with natural, flowing sentences that show appropriate empathy, reference ALL relevant previous conversation context, and offer real, grounded emotional support. No colons, no lists, just warm, compassionate conversation."""
+
+            # Build messages for Groq API with MORE context
+            messages = [
+                {"role": "system", "content": system_prompt},
+            ]
             
-            #Better system prompt that emphasizes context
-            system_prompt = f"""
-                You are Calmi, a warm, grounded, emotionally supportive companion. 
-                Your priority is to help the user feel understood, safe, and less alone, even when they discuss sensitive or difficult topics.
-
-                Your response style:
-                - Speak in complete, natural sentences with a gentle flow.
-                - Always acknowledge the user’s emotions first.
-                - Refer to their previous statements so you sound attentive and present.
-                - After validating their feelings, offer a simple, practical next step they can do right now.
-                - Keep responses short (2-3 sentences), warm, and human.
-
-                Handling sensitive topics:
-                - You do NOT reject the user.
-                - You stay calm, compassionate, and steady.
-                - You can talk about painful emotions (sadness, fear, anger, stress, loneliness, burnout, heartbreak, anxiety, self-doubt).
-                - If the user expresses self-harm thoughts, stay supportive and grounded. Do NOT shut them down. 
-                Say things like: 
-                “I’m really sorry you’re feeling this much pain. You don’t deserve to go through it alone. 
-                It might help to reach out to someone who can be with you right now.”
-                - Avoid instructions that could cause harm.
-                - Focus on comfort, grounding, and gently encouraging them to reach out to someone they trust.
-
-                Tone rules by sentiment:
-                - 'negative': Deep empathy, acknowledge their specific struggle, offer gentle grounding.
-                - 'struggling': Encouraging and practical, give them one small step that reduces overwhelm.
-                - 'positive': Encouraging and supportive, help them appreciate the good moment.
-
-                Always sound like someone who truly cares about how they are feeling right now.
-                {insights_text}
-            """
-
-            # Build messages for Groq API
-            messages = [{"role": "system", "content": system_prompt}]
-            
-            # Add conversation history
+            # Include conversation history (last 12 messages = 6 exchanges)
             if history:
-                for entry in history[-6:]:  # Last 6 messages
+                for entry in history[-12:]:
                     role = "user" if entry["role"] == "user" else "assistant"
                     messages.append({"role": role, "content": entry["message"]})
             
             # Add current user message with sentiment context
-            current_message = f"Sentiment: {sentiment}\nUser: {user_message}"
+            current_message = f"The user's current sentiment is **'{sentiment}'**.\nThey say: \"{user_message}\""
             messages.append({"role": "user", "content": current_message})
+            
+            # Calculate optimal max_tokens
+            max_tokens = self._calculate_smart_max_tokens(messages, sentiment)
+            
+            # Log token estimation
+            total_prompt_tokens = self._estimate_tokens(system_prompt)
+            for msg in messages:
+                total_prompt_tokens += self._estimate_tokens(msg["content"])
+            
+            logger.info(f"Groq API call: sentiment={sentiment}, "
+                       f"estimated_prompt_tokens={total_prompt_tokens}, "
+                       f"max_tokens={max_tokens}, "
+                       f"history_length={len(history)}")
             
             # Call Groq API
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
-                max_tokens=200,  # Shorter for concise responses
-                temperature=0.7,
-                top_p=0.9
+                max_tokens=max_tokens,
+                temperature=0.75,
+                top_p=0.95,
+                frequency_penalty=0.1,
+                presence_penalty=0.1
             )
+            
+            # Log actual token usage if available
+            if hasattr(response, 'usage'):
+                logger.info(f"Groq token usage: {response.usage}")
             
             if response.choices and response.choices[0].message.content:
                 text = response.choices[0].message.content.strip()
-                # Don't over-clean - keep natural punctuation
-                if not text.endswith(('.', '!', '?')):
-                    text = text + '.'
+                text = self._clean_response_text(text)
+                text = self._optimize_response_length(text, sentiment)
                 return text
             
+            logger.warning("Groq API returned no content, using fallback")
             return self._get_fallback_response(sentiment)
             
         except Exception as e:
@@ -516,88 +654,102 @@ class GroqService:
             traceback.print_exc()
             return self._get_fallback_response(sentiment)
     
-    def _get_gentle_guidance(self, user_message):
-        """For non-emotional messages, provide warm redirection"""
-        return "I'm here for emotional support. If something's weighing on you emotionally, I'm all ears. What's on your mind?"
-    
     def _get_crisis_response(self):
-        """Crisis response"""
-        return """I hear the depth of your pain and I want you to know your life matters deeply. This requires immediate professional support.
-
-            Please reach out now:
-            • Philippines: National Center for Mental Health at 1553 or HOPELINE PH at 0917-558-4673 (24/7)
-            • International: Crisis Text Line - Text HOME to 741741
-
-            If you're in immediate danger, go to the nearest hospital or call emergency services. Tell someone you trust how you're feeling.
-
-            You don't have to go through this alone. Professional help can make a real difference. Please make that call now."""
-                    
+        """Crisis response remains the same"""
+        return ("I hear that you're in a very serious situation that requires immediate professional help. "
+                "Please contact the National Center for Mental Health at 1553 or HOPELINE PH at 0917-558-4673 right away. "
+                "If there's immediate danger, call 911 or go to the nearest hospital. "
+                "This is beyond what I can safely help with, and trained professionals need to support you through this.")
+    
     def _get_fallback_response(self, sentiment):
-        """Fallback responses"""
-        responses = {
-            'positive': [
-                "That's wonderful! What's bringing you joy? Maybe you can do more of that today.",
-                "I'm glad you're feeling positive. Try to soak in this feeling. What's contributing to your good mood?"
-            ],
+        """Fallback responses for when API is unavailable"""
+        fallback_responses = {
             'negative': [
-                "I hear you're struggling. That's really tough. What feels hardest for you right now?",
-                "Thank you for trusting me with this. You're not alone. What would help you feel even a bit better?"
+                "I can hear that you're going through a really difficult time. Your feelings are completely valid, and I'm here to support you through this.",
+                "It sounds like you're carrying a lot right now. That takes strength, even if it doesn't feel that way. I'm here to listen.",
+                "What you're feeling is real and it matters. You don't have to go through this alone."
+            ],
+            'positive': [
+                "I'm so glad you're feeling this way! It's wonderful to hear some positivity from you.",
+                "That's great to hear! Moments like these are worth celebrating and holding onto."
+            ],
+            'mixed': [
+                "It makes complete sense that you'd feel both of those emotions at the same time. Conflicting feelings are totally normal and valid.",
+                "I hear you're experiencing different emotions pulling in different directions. That complexity shows how deeply you're processing this."
             ],
             'struggling': [
-                "Looking for direction takes courage. What's one small thing you could focus on in the next hour?",
-                "Let's start small. What's the first tiny step you could take today?"
+                "I hear that you're looking for some direction. Let's think about what might feel manageable as a first step.",
+                "It sounds like you're ready to take action but need help figuring out where to start. That's a great place to be."
             ],
             'neutral': [
-                "I'm here to listen. What's on your mind?",
-                "How are you feeling right now?"
-            ],
-            'grateful': [
-                "You're very welcome! I'm always here when you need support.",
-                "I'm glad I could help! Come back anytime."
-            ],
-            'goodbye': [
-                "Take care! I'll be here whenever you need me.",
-                "Goodbye! Be kind to yourself."
-            ],
-            'greeting': [
-                "Hello! How are you feeling today?",
-                "Hi there! What's on your mind?"
+                "I'm here and listening. What's on your mind right now?",
+                "Thanks for sharing that with me. How are you feeling about it?"
             ],
             'creator': [
-                "I was created by Jhon Paul M. Nouiana and Ian Jhon C. Dosdos! They built me to support you through your feelings. How can I help you today?"
+                "I was created by a dedicated team of developers who wanted to build a supportive mental wellness companion. They designed me to be here for you emotionally. Namely, Jhon Paul Noquiana and Ian John Dosdos.",
+                "My creators are a team of developers passionate about mental health support. They built me to provide a caring space for emotional conversations. Namely, Jhon Paul Noquiana and Ian John Dosdos."
+            ],
+            'grateful': [
+                "You're very welcome. I'm glad I could be here for you.",
+                "It means a lot to hear that. I'm always here whenever you need support."
+            ],
+            'goodbye': [
+                "Take care of yourself. I'm here whenever you need to talk.",
+                "Wishing you well. Remember, I'm here anytime you want to connect."
+            ],
+            'greeting': [
+                "Hello! I'm glad you're here. How are you feeling today?",
+                "Hi there! It's good to hear from you. What's on your mind?"
+            ],
+            'summary': [
+                "I'd love to summarize our conversation for you, but I'm having trouble accessing my AI service right now. From what I remember, we've been talking about some important things. How are you feeling about everything we've discussed?",
+                "I'm experiencing a technical issue that's preventing me from giving you a full summary right now. But I want you to know I've been listening to everything you've shared. What stands out most to you from our conversation?"
             ]
         }
         
-        return random.choice(responses.get(sentiment, responses['neutral']))
+        responses = fallback_responses.get(sentiment, fallback_responses['neutral'])
+        return random.choice(responses)
     
-    def generate_wellness_recommendation(self, mood_history):
-        """Generate natural wellness recommendations"""
-        try:
-            if not mood_history:
-                return "Checking in with your emotions regularly helps you understand your patterns and needs."
-            
-            latest_mood = mood_history[-1]['mood'] if mood_history else 'neutral'
-            
-            recommendations = {
-                'positive': "When you're feeling good, soak in those positive emotions. Consider what brought you joy today.",
-                'negative': "Be gentle with yourself during difficult times. Even three mindful breaths can help.",
-                'struggling': "Remember the power of small wins. Focus on just one manageable task today.",
-                'neutral': "Tune into the subtle feelings present. Sometimes noticing without judgment helps."
-            }
-            
-            return recommendations.get(latest_mood, "Take a moment to check in with yourself. Your wellbeing matters.")
+    def _get_gentle_guidance(self, user_message):
+        """For non-emotional messages, gently guide to emotional sharing OR provide warm redirection/cheering."""
+        lower_msg = user_message.lower()
         
-        except Exception as e:
-            logger.error(f"Error generating wellness recommendation: {e}")
-            return "Be kind to yourself today. Your emotional wellbeing matters."
+        # --- 1. Check if it's actually an emotional topic disguised as advice-seeking ---
+        emotional_advice_topics = [
+            'pregnant', 'pregnancy', 'baby', 'abort', 'relationship',
+            'family', 'parents', 'girlfriend', 'boyfriend', 'friend',
+            'school decision', 'life decision', 'future', 'career choice'
+        ]
         
-    def _match_intent_keywords(self, message):
-        """Helper to find all matching intents"""
-        lower_msg = message.lower()
-        detected = []
+        if any(topic in lower_msg for topic in emotional_advice_topics):
+            # This IS emotional support - shouldn't have reached here
+            # Return supportive message
+            return ("I hear you're looking for guidance on something really important. "
+                   "While I can't make decisions for you, I'm here to support you emotionally "
+                   "as you think through your options. What feelings are coming up for you around this?")
         
-        for intent, keywords in self.intent_map.items():
-            if any(k in lower_msg for k in keywords):
-                detected.append(intent)
+        # --- 2. Check for Task/Work looking for Encouragement (CHEERLEADING) ---
+        task_keywords = ['assignment', 'homework', 'project', 'studying', 'work on', 'gonna do', 'starting my', 'need to finish']
         
-        return detected
+        if any(keyword in lower_msg for keyword in task_keywords):
+            cheer_responses = [
+                "That sounds like a big task! While I can't help you with the assignment itself, I can absolutely cheer you on. Remember to take breaks and be kind to yourself as you work. You've got this!",
+                "I hear you're diving into some work. That takes focus! I'm here for emotional support, but I'm sending you all the motivation and good energy for your task. What's the first small step you're going to tackle?",
+                "That's outside my mental wellness focus, but I admire your dedication to getting it done! Take a deep breath, break it down, and know that I'm rooting for you to succeed in your project!",
+                "Great work starting that project! I can't write code or solve equations, but I can remind you to stay hydrated and step away every 45 minutes. Go get those tasks done!"
+            ]
+            return random.choice(cheer_responses)
+
+        # --- 3. Check for purely factual/technical requests (WARM REDIRECTION) ---
+        technical_factual_keywords = ['code', 'python', 'javascript', 'math', 'algorithm', 'function', 'formula', 'api', 'explain the concept of', 'solve for', 'define', 'history of', 'science', 'physics', 'chemistry', 'business plan', 'legal advice', 'medical diagnosis', 'how to cook', 'how to make']
+        
+        if any(keyword in lower_msg for keyword in technical_factual_keywords):
+            redirection_responses = [
+                "I'm here to support you emotionally and guide you through your feelings. For help with technical or factual questions, I recommend trying Google Search or specific expert platforms like Stack Overflow for coding questions.",
+                "That's outside my area of focus, which is mental wellness and emotional support. For technical help, you might want to check out specialized resources or forums.",
+                "I focus on emotional support rather than technical topics. But I'm curious, how are you feeling about tackling this challenge?"
+            ]
+            return random.choice(redirection_responses)
+        
+        # --- 4. Default gentle guidance ---
+        return "I'm here primarily for emotional support and mental wellness conversations. Is there something on your mind or heart that you'd like to talk about?"
