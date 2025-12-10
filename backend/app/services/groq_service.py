@@ -394,7 +394,7 @@ class GroqService:
         if any(phrase in lower_message for phrase in crisis_keywords):
             return 'crisis'
         
-        #Creator Questions
+        # --- Creator Questions ---
         creator_keywords = [
             'who made you', 'who created you', 'who developed you',
             'who built you', 'who programmed you', 'who designed you',
@@ -406,7 +406,7 @@ class GroqService:
         if any(phrase in lower_message for phrase in creator_keywords):
             return 'creator'
         
-        # Gratitude/Positive Closings 
+        # --- Gratitude/Positive Closings ---
         gratitude_patterns = [
             r'\bthank\b', r'\bthanks\b', r'\bthank you\b', r'\btysm\b', r'\bty\b',
             r'\bappreciate\b', r'\bgrateful\b', r'\byou helped\b', r'\bfeel better\b'
@@ -423,12 +423,13 @@ class GroqService:
         if is_goodbye:
             return 'goodbye'
         
+        # --- Greetings ---
         greeting_keywords = ['hi', 'hello', 'hey', 'good morning', 'good afternoon', 'good evening']
         
         if any(phrase in lower_message for phrase in greeting_keywords) and len(lower_message.split()) <= 3:
             return 'greeting'
         
-        #MIXED EMOTIONS DETECTION 
+        # --- NEW: MIXED EMOTIONS DETECTION ---
         mixed_emotion_indicators = [
             'but', 'however', 'on the other hand', 'at the same time',
             'even though', 'although', 'guilty but', 'happy but',
@@ -465,7 +466,7 @@ class GroqService:
         if has_mixed_indicator or (has_negative and has_positive):
             return 'mixed'
         
-        #Struggling/Guidance-Seeking (INCLUDING PREGNANCY DECISIONS) ---
+        # --- Struggling/Guidance-Seeking (INCLUDING PREGNANCY DECISIONS) ---
         struggle_keywords = [
             'what to do', 'what should i do', 'what should we do', 'how to face', 'how to start',
             'how to get through', 'i need direction', 'i need motivation', 'need advice',
@@ -713,6 +714,7 @@ Respond with natural, flowing sentences that show appropriate empathy, reference
         """For non-emotional messages, gently guide to emotional sharing OR provide warm redirection/cheering."""
         lower_msg = user_message.lower()
         
+        # --- 1. Check if it's actually an emotional topic disguised as advice-seeking ---
         emotional_advice_topics = [
             'pregnant', 'pregnancy', 'baby', 'abort', 'relationship',
             'family', 'parents', 'girlfriend', 'boyfriend', 'friend',
@@ -720,10 +722,13 @@ Respond with natural, flowing sentences that show appropriate empathy, reference
         ]
         
         if any(topic in lower_msg for topic in emotional_advice_topics):
+            # This IS emotional support - shouldn't have reached here
+            # Return supportive message
             return ("I hear you're looking for guidance on something really important. "
                    "While I can't make decisions for you, I'm here to support you emotionally "
                    "as you think through your options. What feelings are coming up for you around this?")
         
+        # --- 2. Check for Task/Work looking for Encouragement (CHEERLEADING) ---
         task_keywords = ['assignment', 'homework', 'project', 'studying', 'work on', 'gonna do', 'starting my', 'need to finish']
         
         if any(keyword in lower_msg for keyword in task_keywords):
@@ -734,7 +739,8 @@ Respond with natural, flowing sentences that show appropriate empathy, reference
                 "Great work starting that project! I can't write code or solve equations, but I can remind you to stay hydrated and step away every 45 minutes. Go get those tasks done!"
             ]
             return random.choice(cheer_responses)
-        
+
+        # --- 3. Check for purely factual/technical requests (WARM REDIRECTION) ---
         technical_factual_keywords = ['code', 'python', 'javascript', 'math', 'algorithm', 'function', 'formula', 'api', 'explain the concept of', 'solve for', 'define', 'history of', 'science', 'physics', 'chemistry', 'business plan', 'legal advice', 'medical diagnosis', 'how to cook', 'how to make']
         
         if any(keyword in lower_msg for keyword in technical_factual_keywords):
