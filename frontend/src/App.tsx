@@ -11,6 +11,7 @@ import ForgotPassword from './pages/ForgotPassword';
 import { sendChatMessage } from './services/apiService';
 import { submitMoodCheckIn as apiSubmitMoodCheckIn } from './services/apiService';
 import { getUserMoodHistory } from './services/apiService';
+import RecommendationModal from './components/RecommendationModal';
 
 function App() {
   const [showForgotPassword, setShowForgotPassword] = useState<boolean>(false);
@@ -46,6 +47,10 @@ function App() {
   const [showRecordDetail, setShowRecordDetail] = useState<boolean>(false);
   const [moodCheckError, setMoodCheckError] = useState<string>('');
   const [selectedEmotions, setSelectedEmotions] = useState<string[]>([]);
+  const [showRecommendation, setShowRecommendation] = useState<boolean>(false);
+  const [currentRecommendation, setCurrentRecommendation] = useState<string>('');
+  const [recommendationMood, setRecommendationMood] = useState<string>('');
+  const [recommendationIntensity, setRecommendationIntensity] = useState<number>(5);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -206,29 +211,40 @@ const moodOptions = [
   };
 
   const submitMoodCheckIn = async (): Promise<void> => {
-    if (selectedEmotions.length === 0) {
-      setMoodCheckError('Please select at least one mood');
-      return;
-    }
+  if (selectedEmotions.length === 0) {
+    setMoodCheckError('Please select at least one mood');
+    return;
+  }
 
-    try {
-      // For multiple moods, we'll send them as an emotions array
-      // The backend will handle creating a summary for the mood field
-      const combinedMood = selectedEmotions.length <= 3 
-        ? selectedEmotions.join(', ')
-        : `${selectedEmotions[0]}, ${selectedEmotions[1]}, +${selectedEmotions.length - 2}`;
-      
-      const response = await apiSubmitMoodCheckIn(
-        sessionId,
-        combinedMood, // Use the summary for mood field
-        moodIntensity,
-        moodNote,
-        selectedEmotions // Pass as emotions array for proper storage
-      );
+  try {
+    // For multiple moods, we'll send them as an emotions array
+    const combinedMood = selectedEmotions.length <= 3 
+      ? selectedEmotions.join(', ')
+      : `${selectedEmotions[0]}, ${selectedEmotions[1]}, +${selectedEmotions.length - 2}`;
+    
+    console.log('📤 Submitting mood check-in...');
+    
+    const response = await apiSubmitMoodCheckIn(
+      sessionId,
+      combinedMood,
+      moodIntensity,
+      moodNote,
+      selectedEmotions
+    );
 
-      console.log('✅ Mood check-in saved:', response);
+    console.log('✅ Mood check-in response:', response);
 
-      // Send confirmation bot message
+    // Close the mood check-in modal
+    setShowMoodCheckin(false);
+
+    // Show AI recommendation if available
+    if (response.recommendation) {
+      setCurrentRecommendation(response.recommendation);
+      setRecommendationMood(selectedEmotions[0]); // Use first mood for emoji
+      setRecommendationIntensity(moodIntensity);
+      setShowRecommendation(true);
+    } else {
+      // Fallback: show confirmation message if no recommendation
       let moodDescription = '';
       if (selectedEmotions.length === 1) {
         moodDescription = selectedEmotions[0];
@@ -250,22 +266,42 @@ const moodOptions = [
       };
 
       setMessages((prev) => [...prev, botMessage]);
-      
-      // Reset form
-      setShowMoodCheckin(false);
-      setCurrentMood(''); 
-      setMoodNote('');
-      setMoodIntensity(5);
-      setSelectedEmotions([]);
-      setActiveFeature('chat');
-      setIsMobileSidebarOpen(false);
-      
-    } catch (error: any) {
-      console.error('Failed to save mood check-in:', error);
-      setMoodCheckError(error.message || 'Failed to save mood check-in. Please try again.');
-      setShowMoodCheckin(false);
     }
+    
+    // Reset form
+    setCurrentMood(''); 
+    setMoodNote('');
+    setMoodIntensity(5);
+    setSelectedEmotions([]);
+    setActiveFeature('chat');
+    setIsMobileSidebarOpen(false);
+    
+  } catch (error: any) {
+    console.error('Failed to save mood check-in:', error);
+    setMoodCheckError(error.message || 'Failed to save mood check-in. Please try again.');
+    setShowMoodCheckin(false);
+  }
+};
+
+// Add handler for closing recommendation modal
+const handleRecommendationClose = () => {
+  setShowRecommendation(false);
+  
+  // Send a bot message acknowledging the mood check-in
+  const botMessage: Message = {
+    id: Date.now() + 1,
+    text: `I've recorded your mood check-in. Remember, I'm here to support you through whatever you're experiencing. Feel free to talk to me anytime. 💙`,
+    sender: 'bot',
+    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    sentiment: getCombinedMoodSentiment(selectedEmotions),
+    sessionId,
   };
+
+  setMessages((prev) => [...prev, botMessage]);
+  
+  // Clear selected emotions after everything
+  setSelectedEmotions([]);
+};
 
   // Add helper function for combined mood sentiment
   const getCombinedMoodSentiment = (moods: string[]): 'positive' | 'neutral' | 'negative' => {
@@ -891,6 +927,14 @@ const moodOptions = [
         border: none; 
       }
     `}</style>
+    <RecommendationModal
+      show={showRecommendation}
+      recommendation={currentRecommendation}
+      mood={recommendationMood}
+      intensity={recommendationIntensity}
+      onClose={handleRecommendationClose}
+      getMoodEmoji={getMoodEmoji}
+    />
     </div>
   );
 }

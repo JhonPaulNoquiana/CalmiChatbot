@@ -239,17 +239,17 @@ export const getMoodHistory = async (sessionId: string) => {
 // Remove the complex update logic - just create new entries
 export const submitMoodCheckIn = async (
   sessionId: string,
-  mood: string, // This can now be comma-separated string
+  mood: string,
   intensity: number,
   note?: string,
-  emotions?: string[], // Keep emotions array for proper storage
+  emotions?: string[],
   tags?: string[]
-): Promise<{ message: string; mood_entry: any }> => {
+): Promise<{ message: string; mood_entry: any; recommendation?: string }> => {
   const token = localStorage.getItem('calmi_token');
   
   const payload: any = {
     session_id: sessionId,
-    mood: mood, // Send as comma-separated string
+    mood: mood,
     intensity: intensity
   };
   
@@ -257,7 +257,6 @@ export const submitMoodCheckIn = async (
     payload.note = note.trim();
   }
   
-  // Store emotions as array
   if (emotions && emotions.length > 0) {
     payload.emotions = emotions;
   }
@@ -284,8 +283,73 @@ export const submitMoodCheckIn = async (
   }
 
   const data = await response.json();
-  console.log('✅ Mood check-in successful:', data);
+  console.log('✅ Mood check-in successful with recommendation:', data);
   return data;
+};
+
+// Add these new interfaces and functions at the end of apiService.ts
+
+export interface MoodStatistics {
+  total_check_ins: number;
+  mood_distribution: Record<string, number>;
+  average_intensity: number;
+  common_emotions?: string[];
+  emotion_distribution?: Record<string, number>;
+  time_period?: string;
+}
+
+export interface AnalyticsRecommendation {
+  recommendation: string;
+  generated_at: string;
+}
+
+export const getAnalyticsRecommendation = async (
+  moodStatistics: MoodStatistics
+): Promise<AnalyticsRecommendation> => {
+  try {
+    console.log('🤖 Requesting analytics recommendation');
+    
+    const response = await fetch(`${API_BASE_URL}/api/mood/analytics/recommendation`, {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify({
+        mood_statistics: moodStatistics
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to get analytics recommendation');
+    }
+
+    const data = await response.json();
+    console.log('✅ Analytics recommendation received');
+    return data;
+  } catch (error) {
+    console.error('❌ Error fetching analytics recommendation:', error);
+    throw error;
+  }
+};
+
+export const getMoodStatistics = async (days: number = 30): Promise<{ statistics: MoodStatistics }> => {
+  try {
+    console.log('📊 Fetching mood statistics for', days, 'days');
+    
+    const response = await fetch(`${API_BASE_URL}/api/mood/statistics?days=${days}`, {
+      method: 'GET',
+      headers: getHeaders(true),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch mood statistics: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error fetching mood statistics:', error);
+    throw error;
+  }
 };
 
 // Optional: Keep update function if you want to allow editing specific entries

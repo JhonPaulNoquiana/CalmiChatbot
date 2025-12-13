@@ -30,7 +30,7 @@ export default function Chat({
   // Detect if device is mobile
   useEffect(() => {
     const checkIfMobile = () => {
-      setIsMobile(window.innerWidth < 1024); // lg breakpoint
+      setIsMobile(window.innerWidth < 1024); 
     };
     
     checkIfMobile();
@@ -40,7 +40,6 @@ export default function Chat({
     const handleFocus = () => {
       if (isMobile) {
         setKeyboardVisible(true);
-        // Scroll to input on focus
         setTimeout(() => {
           inputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }, 100);
@@ -50,7 +49,6 @@ export default function Chat({
     const handleBlur = () => {
       if (isMobile) {
         setKeyboardVisible(false);
-        // Scroll back to messages when keyboard hides
         setTimeout(() => {
           messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
         }, 100);

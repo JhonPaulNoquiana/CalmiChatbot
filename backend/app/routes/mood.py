@@ -11,7 +11,7 @@ groq_service = GroqService()
 @mood_bp.route('/check-in', methods=['POST'])
 @optional_token_required
 def create_mood_entry():
-    """Create a mood check-in entry"""
+    """Create a mood check-in entry with AI recommendation"""
     try:
         data = request.get_json()
         
@@ -30,10 +30,12 @@ def create_mood_entry():
         # Handle mood and emotions
         mood_value = ''
         emotions_value = ''
+        emotions_list = []  # For AI recommendation
         
         # Get emotions from either emotions array or mood string
         if data.get('emotions') and isinstance(data['emotions'], list):
             emotions = data['emotions']
+            emotions_list = emotions  # Store for AI
             # Store emotions as comma-separated string
             emotions_value = ','.join(emotions)
             # For mood field, store first 3 emotions or a summary
@@ -46,20 +48,18 @@ def create_mood_entry():
         elif data.get('mood'):
             # Legacy support for single mood string
             mood_value = data['mood']
-            emotions_value = data['mood']  # Store as emotions too for consistency
+            emotions_value = data['mood']
+            emotions_list = [data['mood']]
         
         tags = ','.join(data.get('tags', [])) if isinstance(data.get('tags'), list) else data.get('tags', '')
         
         # Validate mood (if provided)
         if mood_value and ',' in mood_value:
-            # Split and validate each mood
             moods = [m.strip() for m in mood_value.split(',') if m.strip()]
             for m in moods:
-                # Skip validation for "+X" summary entries
                 if not m.startswith('+') and m not in MoodEntry.VALID_MOODS:
                     return {'error': f'Invalid mood "{m}". Must be one of: {", ".join(MoodEntry.VALID_MOODS)}'}, 400
         elif mood_value and not mood_value.startswith('+'):
-            # Single mood validation
             if mood_value not in MoodEntry.VALID_MOODS:
                 return {'error': f'Invalid mood. Must be one of: {", ".join(MoodEntry.VALID_MOODS)}'}, 400
         
@@ -82,10 +82,10 @@ def create_mood_entry():
         mood_entry = MoodEntry(
             session_id=chat_session.id,
             user_id=request.user_id,
-            mood=mood_value[:255],  # Truncate to 255 characters to avoid database errors
+            mood=mood_value[:255],
             intensity=intensity,
             note=note,
-            emotions=emotions_value[:500],  # Truncate emotions field too
+            emotions=emotions_value[:500],
             tags=tags
         )
         db.session.add(mood_entry)
@@ -94,16 +94,59 @@ def create_mood_entry():
         chat_session.mood_entry_count += 1
         db.session.commit()
         
+        # Generate AI recommendation using the primary mood
+        primary_mood = emotions_list[0] if emotions_list else mood_value.split(',')[0]
+        recommendation = groq_service.generate_mood_recommendation(
+            mood=primary_mood,
+            intensity=intensity,
+            emotions=emotions_list,
+            note=note if note else None
+        )
+        
         return {
             'message': 'Mood entry created successfully',
-            'mood_entry': mood_entry.to_dict()
+            'mood_entry': mood_entry.to_dict(),
+            'recommendation': recommendation  
         }, 201
     
     except Exception as e:
         db.session.rollback()
         print(f"Error creating mood entry: {e}")
+        import traceback
+        traceback.print_exc()
         return {'error': 'Failed to create mood entry', 'details': str(e)}, 500
 
+@mood_bp.route('/analytics/recommendation', methods=['POST'])
+@optional_token_required
+def get_analytics_recommendation():
+    """Generate AI recommendation based on mood analytics"""
+    try:
+        data = request.get_json()
+        
+        if not data or 'mood_statistics' not in data:
+            return {'error': 'mood_statistics required in request body'}, 400
+        
+        mood_stats = data['mood_statistics']
+        
+        # Validate required fields
+        required_fields = ['total_check_ins', 'mood_distribution', 'average_intensity']
+        for field in required_fields:
+            if field not in mood_stats:
+                return {'error': f'Missing required field: {field}'}, 400
+        
+        # Generate recommendation using Groq
+        recommendation = groq_service.generate_analytics_recommendation(mood_stats)
+        
+        return {
+            'recommendation': recommendation,
+            'generated_at': datetime.utcnow().isoformat()
+        }, 200
+    
+    except Exception as e:
+        print(f"Error generating analytics recommendation: {e}")
+        import traceback
+        traceback.print_exc()
+        return {'error': 'Failed to generate recommendation', 'details': str(e)}, 500
 
 @mood_bp.route('/entry/<int:entry_id>', methods=['PUT'])
 @optional_token_required
@@ -264,7 +307,7 @@ def get_mood_entry(entry_id):
 @mood_bp.route('/statistics', methods=['GET'])
 @token_required
 def get_mood_statistics():
-    """Get mood statistics for user"""
+    """Get mood statistics for user with enhanced analytics"""
     try:
         days = int(request.args.get('days', 30))
         start_date = datetime.utcnow() - timedelta(days=days)
@@ -277,15 +320,27 @@ def get_mood_statistics():
         
         # Calculate statistics
         mood_counts = {}
+        emotion_counts = {}
         total_intensity = 0
         
         for entry in entries:
-            mood = entry.mood
-            mood_counts[mood] = mood_counts.get(mood, 0) + 1
+            # Count individual moods from emotions field
+            if entry.emotions:
+                emotions_list = entry.emotions.split(',') if isinstance(entry.emotions, str) else entry.emotions
+                for emotion in emotions_list:
+                    emotion = emotion.strip()
+                    if emotion:
+                        mood_counts[emotion] = mood_counts.get(emotion, 0) + 1
+                        emotion_counts[emotion] = emotion_counts.get(emotion, 0) + 1
+            
             total_intensity += entry.intensity
         
         average_intensity = total_intensity / len(entries) if entries else 0
         dominant_mood = max(mood_counts, key=mood_counts.get) if mood_counts else 'No data'
+        
+        # Get top emotions
+        common_emotions = sorted(emotion_counts.items(), key=lambda x: x[1], reverse=True)[:5]
+        common_emotions = [emotion for emotion, count in common_emotions]
         
         return {
             'statistics': {
@@ -293,12 +348,18 @@ def get_mood_statistics():
                 'average_intensity': round(average_intensity, 2),
                 'dominant_mood': dominant_mood,
                 'mood_distribution': mood_counts,
-                'period': f'Last {days} days'
+                'emotion_distribution': emotion_counts,
+                'common_emotions': common_emotions,
+                'period': f'Last {days} days',
+                'time_period': f'Last {days} days',
+                'total_check_ins': len(entries)
             }
         }, 200
     
     except Exception as e:
         print(f"Error fetching mood statistics: {e}")
+        import traceback
+        traceback.print_exc()
         return {'error': 'Failed to fetch mood statistics', 'details': str(e)}, 500
 
 

@@ -42,8 +42,6 @@ class GroqService:
         """Add a message to conversation history with INCREASED storage"""
         history = self.get_conversation_history(user_id)
         history.append({"role": role, "message": message})
-        # CHANGED: Keep last 40 exchanges (80 messages) instead of 20
-        # This ensures better memory across longer conversations
         if len(history) > 80:
             self.conversation_histories[user_id] = history[-80:]
     
@@ -424,7 +422,7 @@ class GroqService:
             return 'goodbye'
         
         # --- Greetings ---
-        greeting_keywords = ['hi', 'hello', 'hey', 'good morning', 'good afternoon', 'good evening']
+        greeting_keywords = ['hi', 'hello', 'hey', 'good morning', 'good afternoon', 'good evening', 'yo', 'greetings', 'morning', 'afternoon', 'evening']
         
         if any(phrase in lower_message for phrase in greeting_keywords) and len(lower_message.split()) <= 3:
             return 'greeting'
@@ -753,3 +751,221 @@ Respond with natural, flowing sentences that show appropriate empathy, reference
         
         # --- 4. Default gentle guidance ---
         return "I'm here primarily for emotional support and mental wellness conversations. Is there something on your mind or heart that you'd like to talk about?"
+    
+    def generate_mood_recommendation(self, mood, intensity, emotions, note=None):
+        """
+        Generate personalized recommendation based on a single mood check-in
+        
+        Args:
+            mood: Primary mood (e.g., 'happy', 'sad', 'anxious')
+            intensity: Intensity level (1-10)
+            emotions: List of additional emotions
+            note: Optional user note
+        
+        Returns:
+            str: Personalized recommendation text
+        """
+        try:
+            if not self.client:
+                return self._get_fallback_mood_recommendation(mood, intensity)
+            
+            # Build context about the mood check-in
+            emotions_text = ", ".join(emotions) if emotions else "none specified"
+            note_text = f"User's note: {note}" if note else "No additional notes"
+            
+            # Determine severity level
+            severity = self._get_severity_level(intensity)
+            
+            system_prompt = """You are Calmi, a compassionate mental wellness companion. You provide personalized, actionable wellness recommendations based on mood check-ins.
+
+Your recommendations should:
+1. Acknowledge and validate the user's current emotional state
+2. Provide 2-3 specific, actionable steps they can take RIGHT NOW
+3. Be encouraging and supportive without being dismissive
+4. Match the intensity of their emotions (gentle for mild, more urgent for intense)
+5. Be practical and realistic for someone in their current state
+
+IMPORTANT:
+- Keep responses concise (100-200 words)
+- Focus on immediate, achievable actions
+- Use a warm, conversational tone
+- Don't use bullet points or lists - write in flowing paragraphs
+- For high intensity (8-10), prioritize calming/grounding techniques
+- For crisis situations, always recommend professional help"""
+
+            user_prompt = f"""Generate a personalized wellness recommendation for someone who just checked in with:
+
+    Primary Mood: {mood}
+    Intensity: {intensity}/10 ({severity})
+    Additional Emotions: {emotions_text}
+    {note_text}
+
+    Provide compassionate, actionable advice for what they can do right now to support their wellbeing."""
+
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ]
+            
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                max_tokens=400,
+                temperature=0.8,
+                top_p=0.95
+            )
+            
+            if response.choices and response.choices[0].message.content:
+                recommendation = response.choices[0].message.content.strip()
+                return self._clean_response_text(recommendation)
+            
+            return self._get_fallback_mood_recommendation(mood, intensity)
+        
+        except Exception as e:
+            logger.error(f"Error generating mood recommendation: {e}")
+            return self._get_fallback_mood_recommendation(mood, intensity)
+
+    def generate_analytics_recommendation(self, mood_statistics):
+        """
+        Generate comprehensive wellness recommendation based on mood analytics
+        
+        Args:
+            mood_statistics: Dict containing:
+                - total_check_ins: Total number of mood check-ins
+                - mood_distribution: Dict of mood -> count
+                - average_intensity: Average intensity across all check-ins
+                - common_emotions: List of most common emotions
+                - time_period: Time period of analysis (e.g., "Last 30 days")
+        
+        Returns:
+            str: Comprehensive wellness recommendation
+        """
+        try:
+            if not self.client:
+                return self._get_fallback_analytics_recommendation(mood_statistics)
+            
+            # Prepare statistics summary
+            dominant_moods = sorted(
+                mood_statistics.get('mood_distribution', {}).items(),
+                key=lambda x: x[1],
+                reverse=True
+            )[:3]
+            
+            dominant_moods_text = ", ".join([f"{mood} ({count} times)" for mood, count in dominant_moods])
+            
+            common_emotions = mood_statistics.get('common_emotions', [])[:5]
+            emotions_text = ", ".join(common_emotions) if common_emotions else "various emotions"
+            
+            avg_intensity = mood_statistics.get('average_intensity', 0)
+            total_checkins = mood_statistics.get('total_check_ins', 0)
+            time_period = mood_statistics.get('time_period', 'recent period')
+            
+            system_prompt = """You are Calmi, a mental wellness companion analyzing a user's emotional patterns over time. Based on their mood check-in analytics, provide insightful, personalized wellness guidance.
+
+    Your analysis should:
+    1. Identify patterns in their emotional state (positive trends, areas of concern)
+    2. Acknowledge their consistency in checking in (if applicable)
+    3. Provide 3-4 strategic recommendations for long-term wellbeing
+    4. Suggest specific practices, habits, or resources that align with their patterns
+    5. Be encouraging about progress and gentle about challenges
+
+    IMPORTANT:
+    - Keep response 200-300 words
+    - Be specific to THEIR data, not generic advice
+    - Write in warm, flowing paragraphs (no bullet points or lists)
+    - Celebrate positive patterns while addressing concerns compassionately
+    - If patterns show distress, gently suggest professional support
+    - Focus on sustainable, long-term wellness strategies"""
+
+            user_prompt = f"""Analyze these mood check-in patterns and provide personalized wellness recommendations:
+
+    Time Period: {time_period}
+    Total Check-ins: {total_checkins}
+    Most Common Moods: {dominant_moods_text}
+    Average Intensity: {avg_intensity}/10
+    Common Emotions: {emotions_text}
+
+    Provide thoughtful insights and actionable recommendations for their ongoing wellness journey."""
+
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ]
+            
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                max_tokens=600,
+                temperature=0.8,
+                top_p=0.95
+            )
+            
+            if response.choices and response.choices[0].message.content:
+                recommendation = response.choices[0].message.content.strip()
+                return self._clean_response_text(recommendation)
+            
+            return self._get_fallback_analytics_recommendation(mood_statistics)
+            
+        except Exception as e:
+            logger.error(f"Error generating analytics recommendation: {e}")
+            return self._get_fallback_analytics_recommendation(mood_statistics)
+
+    def _get_severity_level(self, intensity):
+        """Map intensity to severity level"""
+        if intensity <= 3:
+            return "mild"
+        elif intensity <= 6:
+            return "moderate"
+        elif intensity <= 8:
+            return "high"
+        else:
+            return "very high"
+
+    def _get_fallback_mood_recommendation(self, mood, intensity):
+        """Fallback recommendations when API is unavailable"""
+        recommendations = {
+            'happy': "It's wonderful that you're feeling good! To maintain this positive state, consider taking a moment to savor what's bringing you joy. Maybe share your happiness with someone or engage in an activity you love.",
+            
+            'sad': f"I hear that you're feeling sad{' quite intensely' if intensity > 7 else ''}. It's okay to feel this way. Consider reaching out to someone you trust, or try a gentle activity like listening to comforting music or taking a short walk. Be kind to yourself right now.",
+            
+            'anxious': f"Anxiety can feel overwhelming{' especially at this intensity' if intensity > 7 else ''}. Try grounding yourself with deep breathing - breathe in for 4 counts, hold for 4, out for 4. Focus on what you can control right now, and consider stepping away from stressful situations if possible.",
+            
+            'stressed': "When stress builds up, small breaks can make a big difference. Try a 5-minute pause to stretch, breathe, or step outside. Breaking tasks into smaller pieces can also help reduce overwhelm.",
+            
+            'calm': "It's lovely that you're experiencing calmness. This is a great state to build on - perhaps try some reflection, meditation, or a peaceful activity that nurtures this feeling.",
+            
+            'angry': f"Anger is a valid emotion{' and yours feels quite intense right now' if intensity > 7 else ''}. Before responding to whatever triggered this, try taking some space. Physical activity, deep breathing, or writing your thoughts down can help process these feelings constructively.",
+            
+            'lonely': "Loneliness can be really difficult. If you're able, reach out to someone - even a brief message can help. If that's not possible right now, consider engaging in a community activity or online group around something you enjoy.",
+            
+            'tired': "Your body and mind need rest. If possible, prioritize sleep tonight. In the meantime, gentle movement, staying hydrated, and avoiding heavy decisions can help you get through this tired period.",
+            
+            'confused': "When confusion sets in, it helps to step back and organize your thoughts. Try writing down what's unclear, talking it through with someone, or taking a break to return with fresh perspective.",
+        }
+        
+        default = "Thank you for checking in with yourself. Based on how you're feeling, focus on self-care basics: rest, nourishment, movement, and connection. If these feelings persist or intensify, consider reaching out to a mental health professional."
+        
+        recommendation = recommendations.get(mood.lower(), default)
+        
+        if intensity >= 9:
+            recommendation += "\n\nGiven the high intensity of what you're experiencing, please consider reaching out to a mental health professional or trusted support person. You don't have to navigate this alone."
+        
+        return recommendation
+
+    def _get_fallback_analytics_recommendation(self, mood_statistics):
+        """Fallback analytics recommendation when API is unavailable"""
+        avg_intensity = mood_statistics.get('average_intensity', 0)
+        total_checkins = mood_statistics.get('total_check_ins', 0)
+        
+        recommendation = f"Thank you for consistently checking in with yourself - you've recorded {total_checkins} mood entries, which shows real commitment to self-awareness. "
+        
+        if avg_intensity < 4:
+            recommendation += "Your overall intensity levels have been relatively mild, which is encouraging. Continue maintaining the practices that support your wellbeing. "
+        elif avg_intensity < 7:
+            recommendation += "Your intensity levels show moderate emotional experiences. This is normal, and your awareness helps you navigate them. "
+        else:
+            recommendation += "Your intensity levels have been quite high. This suggests you're experiencing significant emotional challenges. Please consider additional support from a mental health professional. "
+        
+        recommendation += "Keep using mood check-ins as a tool for self-reflection, and remember that patterns can guide you toward what supports your wellness best."
+        
+        return recommendation
