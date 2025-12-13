@@ -230,15 +230,50 @@ export default function History({
     }
   };
 
+  const formatTime = (dateString: string) => {
+    try {
+      // Add 'Z' to indicate UTC if not present
+      const utcString = dateString.endsWith('Z') ? dateString : dateString + 'Z';
+      const date = new Date(utcString);
+      
+      if (isNaN(date.getTime())) {
+        return 'Invalid time';
+      }
+      
+      // Now the date is correctly parsed as UTC and displayed in local time
+      return date.toLocaleTimeString('en-US', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        hour12: true 
+      });
+    } catch (error) {
+      console.error('Error formatting time:', dateString, error);
+      return 'Invalid time';
+    }
+  };
+
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleString([], { 
-      month: 'short', 
-      day: 'numeric', 
-      year: 'numeric',
-      hour: '2-digit', 
-      minute: '2-digit' 
-    });
+    try {
+      // Add 'Z' to indicate UTC if not present
+      const utcString = dateString.endsWith('Z') ? dateString : dateString + 'Z';
+      const date = new Date(utcString);
+      
+      if (isNaN(date.getTime())) {
+        return 'Invalid date';
+      }
+      
+      return date.toLocaleString('en-US', { 
+        month: 'short', 
+        day: 'numeric', 
+        year: 'numeric',
+        hour: '2-digit', 
+        minute: '2-digit',
+        hour12: true 
+      });
+    } catch (error) {
+      console.error('Error formatting date:', dateString, error);
+      return 'Invalid date';
+    }
   };
 
   const getMoodColor = (mood: string | undefined) => {
@@ -496,10 +531,7 @@ export default function History({
                               </div>
                             </div>
                             <div className="text-xs text-gray-500">
-                              {new Date(entry.created_at).toLocaleTimeString([], { 
-                                hour: '2-digit', 
-                                minute: '2-digit' 
-                              })}
+                              {formatTime(entry.created_at)}
                             </div>
                           </div>
                           
@@ -570,7 +602,7 @@ export default function History({
                     <p className="text-xs sm:text-sm break-words">{msg.text}</p>
                     <p className="text-xs mt-2 opacity-70 flex items-center gap-1">
                       <Clock className="w-3 h-3" />
-                      {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {formatTime(msg.created_at)}
                     </p>
                   </div>
                 </div>
@@ -586,7 +618,7 @@ export default function History({
                   id: msg.id,
                   text: msg.text,
                   sender: msg.sender as 'user' | 'bot',
-                  timestamp: new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                  timestamp: formatTime(msg.created_at),
                   sessionId: selectedSessionChat.session_id,
                   sentiment: msg.sentiment as 'positive' | 'neutral' | 'negative',
                 }));
@@ -742,10 +774,7 @@ export default function History({
                                         <div className="text-xs text-gray-500">Intensity: {latestMoodEntry.intensity}/10</div>
                                       </div>
                                       <div className="text-xs text-gray-400">
-                                        {new Date(latestMoodEntry.created_at).toLocaleTimeString([], { 
-                                          hour: '2-digit', 
-                                          minute: '2-digit' 
-                                        })}
+                                        {formatTime(latestMoodEntry.created_at)}
                                       </div>
                                     </div>
                                     
