@@ -18,14 +18,15 @@ def create_app(config_name='development'):
     CORS(app, resources={
         r"/api/*": {
             "origins": [
-                "https://calmi-chatbot-project-pgp47hymi-ians-projects-b4622a8b.vercel.app",  
-                "http://localhost:5173"        
+                "https://calmi-chatbot-project.vercel.app",  
+                "http://localhost:5173"
             ],
             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
             "allow_headers": ["Content-Type", "Authorization"],
             "supports_credentials": True
         }
     })
+
 
     # 1. Initialization Blueprint
     from .routes.init_db import init_bp

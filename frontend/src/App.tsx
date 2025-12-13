@@ -564,6 +564,7 @@ const getMoodSentiment = (mood: string): 'positive' | 'neutral' | 'negative' => 
         ${isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
         {/*Desktop Header - Enhanced */}
+        {/* Added a light, non-functional comment here for change detection */}
         <div className="hidden lg:flex items-center space-x-3 mb-10">
           <div className="bg-white/25 backdrop-blur-lg p-3 rounded-2xl shadow-lg ring-1 ring-white/30">
             <Heart className="w-7 h-7 text-white" fill="currentColor" />
@@ -584,7 +585,7 @@ const getMoodSentiment = (mood: string): 'positive' | 'neutral' | 'negative' => 
           </button>
         </div>
 
-        <nav className="space-y-3 mb-10 flex-1">
+        <nav className="space-y-4 mb-10 flex-1"> {/* Changed 'space-y-3' to 'space-y-4' */}
           <button
             onClick={() => {
               setActiveFeature('chat');
