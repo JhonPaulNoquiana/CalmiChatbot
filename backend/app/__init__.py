@@ -10,15 +10,19 @@ def create_app(config_name='development'):
     app = Flask(__name__)
     app.config.from_object(config[config_name])
 
-    # Initialize database and JWT
+    # Initialize extensions
     db.init_app(app)
     jwt.init_app(app)
 
-    # CRITICAL: CORS Configuration
+    #M ODEL REGISTRATION
+    with app.app_context():
+        from app import models  # noqa: F401
+
+    # CORS Configuration
     CORS(app, resources={
         r"/api/*": {
             "origins": [
-                "https://calmi-chatbot-project.vercel.app",  
+                "https://calmi-chatbot-project.vercel.app",
                 "http://localhost:5173"
             ],
             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -27,16 +31,13 @@ def create_app(config_name='development'):
         }
     })
 
-
-    # 1. Initialization Blueprint
+    # Blueprints
     from .routes.init_db import init_bp
-    app.register_blueprint(init_bp, url_prefix='/api')
-
-    # 2. Core Application Blueprints
     from .routes.auth import auth_bp
     from .routes.chat import chat_bp
     from .routes.mood import mood_bp
 
+    app.register_blueprint(init_bp, url_prefix='/api')
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(chat_bp, url_prefix='/api/chat')
     app.register_blueprint(mood_bp, url_prefix='/api/mood')
