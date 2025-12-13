@@ -31,7 +31,6 @@ const intensityLabels: Record<number, string> = {
 };
 
 export default function Mood({ 
-  currentMood, 
   setCurrentMood, 
   moodIntensity, 
   setMoodIntensity, 

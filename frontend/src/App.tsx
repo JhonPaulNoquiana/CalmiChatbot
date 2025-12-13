@@ -41,7 +41,6 @@ function App() {
   const [currentMood, setCurrentMood] = useState<string>('');
   const [moodIntensity, setMoodIntensity] = useState<number>(5);
   const [moodNote, setMoodNote] = useState<string>('');
-  const [moodHistory, setMoodHistory] = useState<MoodEntry[]>([]);
   const [showMoodCheckin, setShowMoodCheckin] = useState<boolean>(false);
   const [selectedRecord] = useState<MoodEntry | null>(null);
   const [showRecordDetail, setShowRecordDetail] = useState<boolean>(false);
@@ -115,7 +114,6 @@ const moodOptions = [
                    entry.emotions) : [],
         }));
         
-        setMoodHistory(formattedHistory);
         console.log('✅ Loaded mood history:', formattedHistory.length, 'entries');
       } catch (error) {
         console.error('❌ Failed to load mood history:', error);
@@ -229,25 +227,6 @@ const moodOptions = [
       );
 
       console.log('✅ Mood check-in saved:', response);
-
-      // Create local mood entry for immediate UI update
-      const moodEntry: MoodEntry = {
-        id: response.mood_entry.id,
-        mood: response.mood_entry.mood, // Use the mood from response
-        intensity: moodIntensity,
-        timestamp: new Date().toLocaleString([], { 
-          month: 'short', 
-          day: 'numeric', 
-          hour: '2-digit', 
-          minute: '2-digit' 
-        }),
-        note: moodNote,
-        sessionId,
-        emotions: selectedEmotions, // Store the full array
-      };
-
-      // Always add to mood history (multiple entries allowed)
-      setMoodHistory((prev) => [moodEntry, ...prev]);
 
       // Send confirmation bot message
       let moodDescription = '';

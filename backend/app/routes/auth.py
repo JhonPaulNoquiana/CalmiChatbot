@@ -175,16 +175,7 @@ def forgot_password():
         
         # Check if user exists - use direct SQL for debugging
         from app.models import db
-        from sqlalchemy import text
         
-        # First, let's test the database connection
-        print("🔍 DEBUG: Testing database connection...")
-        try:
-            result = db.session.execute(text("SELECT 1")).scalar()
-            print(f"🔍 DEBUG: Database connection test: {result}")
-        except Exception as db_error:
-            print(f"❌ DEBUG: Database connection error: {db_error}")
-            return {'error': f'Database error: {db_error}'}, 500
         
         # Now query the user
         print(f"🔍 DEBUG: Querying user with email: {email}")
