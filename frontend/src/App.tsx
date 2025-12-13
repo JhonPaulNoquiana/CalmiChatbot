@@ -41,15 +41,16 @@ function App() {
   const [currentMood, setCurrentMood] = useState<string>('');
   const [moodIntensity, setMoodIntensity] = useState<number>(5);
   const [moodNote, setMoodNote] = useState<string>('');
-  const [moodHistory, setMoodHistory] = useState<MoodEntry[]>([]);
   const [showMoodCheckin, setShowMoodCheckin] = useState<boolean>(false);
   const [selectedRecord] = useState<MoodEntry | null>(null);
   const [showRecordDetail, setShowRecordDetail] = useState<boolean>(false);
   const [moodCheckError, setMoodCheckError] = useState<string>('');
+  const [selectedEmotions, setSelectedEmotions] = useState<string[]>([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const canCheckInMood = !moodHistory.some((entry) => entry.sessionId === sessionId);
+  // REMOVED: canCheckInMood check - users can always check in their mood
+  // const canCheckInMood = !moodHistory.some((entry) => entry.sessionId === sessionId);
 
   useEffect(() => {
     if (isGuest) {
@@ -108,9 +109,11 @@ const moodOptions = [
           }),
           note: entry.note || '',
           sessionId: entry.session_id_string || String(entry.session_id),
+          emotions: entry.emotions ? (typeof entry.emotions === 'string' ? 
+                   entry.emotions.split(',').filter((e: string) => e.trim()) : 
+                   entry.emotions) : [],
         }));
         
-        setMoodHistory(formattedHistory);
         console.log('✅ Loaded mood history:', formattedHistory.length, 'entries');
       } catch (error) {
         console.error('❌ Failed to load mood history:', error);
@@ -169,13 +172,12 @@ const moodOptions = [
       
       const botMessage: Message = {
         id: Date.now() + 1,
-        text: response.message || 'I understand. Tell me more about how you\'re feeling.',
+        text: response.message || "I hear you. Thank you for sharing that with me.",
         sender: 'bot',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         sentiment: response.sentiment || 'neutral',
         sessionId,
       };
-      
       setMessages((prev) => [...prev, botMessage]);
     } catch (error) {
       console.error('API call failed, using fallback response. Error:', error);
@@ -204,49 +206,46 @@ const moodOptions = [
   };
 
   const submitMoodCheckIn = async (): Promise<void> => {
-    if (!currentMood) return;
-
-    // Check if already checked in for this session (local check)
-    if (moodHistory.some((entry) => entry.sessionId === sessionId)) {
-      setMoodCheckError('One Mood Check In per chat');
-      setShowMoodCheckin(false);
+    if (selectedEmotions.length === 0) {
+      setMoodCheckError('Please select at least one mood');
       return;
     }
 
     try {
+      // For multiple moods, we'll send them as an emotions array
+      // The backend will handle creating a summary for the mood field
+      const combinedMood = selectedEmotions.length <= 3 
+        ? selectedEmotions.join(', ')
+        : `${selectedEmotions[0]}, ${selectedEmotions[1]}, +${selectedEmotions.length - 2}`;
+      
       const response = await apiSubmitMoodCheckIn(
         sessionId,
-        currentMood,
+        combinedMood, // Use the summary for mood field
         moodIntensity,
-        moodNote
+        moodNote,
+        selectedEmotions // Pass as emotions array for proper storage
       );
 
-      console.log('✅ Mood check-in saved to database:', response);
-
-      // Create local mood entry for immediate UI update
-      const moodEntry: MoodEntry = {
-        id: response.mood_entry.id,
-        mood: currentMood,
-        intensity: moodIntensity,
-        timestamp: new Date().toLocaleString([], { 
-          month: 'short', 
-          day: 'numeric', 
-          hour: '2-digit', 
-          minute: '2-digit' 
-        }),
-        note: moodNote,
-        sessionId, // Use the current session string ID
-      };
-
-      setMoodHistory((prev) => [moodEntry, ...prev]);
+      console.log('✅ Mood check-in saved:', response);
 
       // Send confirmation bot message
+      let moodDescription = '';
+      if (selectedEmotions.length === 1) {
+        moodDescription = selectedEmotions[0];
+      } else if (selectedEmotions.length <= 3) {
+        moodDescription = selectedEmotions.join(', ');
+      } else {
+        moodDescription = `${selectedEmotions.length} different moods`;
+      }
+      
       const botMessage: Message = {
         id: Date.now() + 1,
-        text: `Thank you for checking in! I've recorded that you're feeling ${currentMood}. Remember, it's okay to feel this way. I'm here whenever you need support. 💙`,
+        text: `Thank you for checking in! I've recorded that you're feeling ${moodDescription}. ${
+          moodNote ? `Thanks for sharing your note. ` : ''
+        }Remember, it's okay to feel this way. I'm here whenever you need support. 💙`,
         sender: 'bot',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        sentiment: getMoodSentiment(currentMood),
+        sentiment: getCombinedMoodSentiment(selectedEmotions),
         sessionId,
       };
 
@@ -254,20 +253,47 @@ const moodOptions = [
       
       // Reset form
       setShowMoodCheckin(false);
-      setCurrentMood('');
+      setCurrentMood(''); 
       setMoodNote('');
       setMoodIntensity(5);
+      setSelectedEmotions([]);
       setActiveFeature('chat');
       setIsMobileSidebarOpen(false);
       
     } catch (error: any) {
       console.error('Failed to save mood check-in:', error);
-      
-      // Show error to user
       setMoodCheckError(error.message || 'Failed to save mood check-in. Please try again.');
       setShowMoodCheckin(false);
     }
-};
+  };
+
+  // Add helper function for combined mood sentiment
+  const getCombinedMoodSentiment = (moods: string[]): 'positive' | 'neutral' | 'negative' => {
+    if (moods.length === 0) return 'neutral';
+    
+    // Count positive, negative, neutral moods
+    let positiveCount = 0;
+    let negativeCount = 0;
+    let neutralCount = 0;
+    
+    moods.forEach(mood => {
+      switch (mood) {
+        case 'happy': positiveCount++; break;
+        case 'sad': 
+        case 'anxious':
+        case 'lonely':
+        case 'stressed': 
+        case 'tired': 
+        case 'angry': negativeCount++; break;
+        case 'neutral': neutralCount++; break;
+        default: neutralCount++;
+      }
+    });
+    
+    if (positiveCount > negativeCount && positiveCount > neutralCount) return 'positive';
+    if (negativeCount > positiveCount && negativeCount > neutralCount) return 'negative';
+    return 'neutral';
+  };
 
   const startNewChat = () => {
     const newSessionId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -276,6 +302,7 @@ const moodOptions = [
     setCurrentMood('');
     setMoodNote('');
     setMoodIntensity(5);
+    setSelectedEmotions([]);
     setShowMoodCheckin(false);
     setMoodCheckError('');
     setInspirationClicks(0);
@@ -370,20 +397,6 @@ const moodOptions = [
     const option = moodOptions.find((m) => m.value === mood);
     return option?.emoji || '😐';
   };
-
-const getMoodSentiment = (mood: string): 'positive' | 'neutral' | 'negative' => {
-  switch (mood) {
-    case 'happy': return 'positive';
-    case 'sad': 
-    case 'anxious':
-    case 'lonely':
-    case 'stressed': 
-        case 'tired': 
-    case 'angry': return 'negative';
-    case 'neutral': return 'neutral';
-    default: return 'neutral';
-  }
-};
 
   const detectUserSentiment = (message: string): 'positive' | 'neutral' | 'negative' => {
     const lowerMessage = message.toLowerCase();
@@ -559,151 +572,154 @@ const getMoodSentiment = (mood: string): 'positive' | 'neutral' | 'negative' => 
         lg:rounded-l-3xl p-6 flex flex-col text-white shadow-2xl transition-all duration-300 ease-out
         ${isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
-        {/*Desktop Header - Enhanced */}
-        {/* Added a light, non-functional comment here for change detection */}
-        <div className="hidden lg:flex items-center space-x-3 mb-10">
-          <div className="bg-white/25 backdrop-blur-lg p-3 rounded-2xl shadow-lg ring-1 ring-white/30">
-            <Heart className="w-7 h-7 text-white" fill="currentColor" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight drop-shadow-lg">{isGuest ? 'Calmi (Guest)' : 'Calmi'}</h1>
-            <p className="text-white/85 text-sm font-medium drop-shadow-sm">Your Wellness Companion</p>
-          </div>
-        </div>
-
-        {/* Mobile close button */}
-        <div className="lg:hidden flex justify-end mb-4">
+        {/* Mobile close button - at the top */}
+        <div className="lg:hidden flex justify-end mb-6">
           <button
             onClick={() => setIsMobileSidebarOpen(false)}
-            className="bg-white/25 backdrop-blur-lg p-2 rounded-xl hover:bg-white/35 active:scale-95 transition-all duration-200 ring-1 ring-white/30"
+            className="bg-white/20 hover:bg-white/30 p-2 rounded-xl transition-all duration-200"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <nav className="space-y-4 mb-10 flex-1"> {/* Changed 'space-y-3' to 'space-y-4' */}
-          <button
-            onClick={() => {
-              setActiveFeature('chat');
-              setIsMobileSidebarOpen(false);
-            }}
-            className={`group w-full flex items-center space-x-3 p-4 rounded-2xl text-left transition-all duration-300 hover:shadow-lg ${
-              activeFeature === 'chat' 
-                ? 'bg-white text-indigo-600 shadow-xl scale-105 ring-2 ring-indigo-200/50' 
-                : 'text-white hover:bg-white/15 hover:scale-[1.02] hover:shadow-md'
-            }`}
-          >
-            <Bot className="w-5 h-5 flex-shrink-0" />
-            <span className="font-semibold group-hover:translate-x-1 transition-transform">AI Chat</span>
-          </button>
-
-          <button
-            onClick={() => {
-              setActiveFeature('mood');
-              setIsMobileSidebarOpen(false);
-            }}
-            className={`group w-full flex items-center space-x-3 p-4 rounded-2xl text-left transition-all duration-300 hover:shadow-lg ${
-              activeFeature === 'mood' 
-                ? 'bg-white text-indigo-600 shadow-xl scale-105 ring-2 ring-indigo-200/50' 
-                : 'text-white hover:bg-white/15 hover:scale-[1.02] hover:shadow-md'
-            }`}
-          >
-            <Smile className="w-5 h-5 flex-shrink-0" />
-            <span className="font-semibold group-hover:translate-x-1 transition-transform">Mood Check-in</span>
-          </button>
-
-          <button
-            onClick={() => {
-              setActiveFeature('history');
-              setIsMobileSidebarOpen(false);
-            }}
-            className={`group w-full flex items-center space-x-3 p-4 rounded-2xl text-left transition-all duration-300 hover:shadow-lg ${
-              activeFeature === 'history' 
-                ? 'bg-white text-indigo-600 shadow-xl scale-105 ring-2 ring-indigo-200/50' 
-                : 'text-white hover:bg-white/15 hover:scale-[1.02] hover:shadow-md'
-            }`}
-          >
-            <HistoryIcon className="w-5 h-5 flex-shrink-0" />
-            <span className="font-semibold group-hover:translate-x-1 transition-transform">History</span>
-          </button>
-        </nav>
-
-        <div className="space-y-3">
-          <button
-            onClick={startNewChat}
-            className="w-full bg-gradient-to-r from-indigo-400 to-purple-600 text-white py-3 rounded-2xl font-semibold hover:shadow-xl active:scale-95 transition-all duration-300 hover:scale-105 mb-2 ring-1 ring-white/30"
-          >
-            New Chat
-          </button>
-
-          {moodCheckError && (
-            <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-              <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-gray-100 animate-scale-in text-center">
-                <h3 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-4">
-                  {moodCheckError}
-                </h3>
-                <button
-                  onClick={startNewChat}
-                  className="w-full bg-gradient-to-r from-indigo-500 to-purple-500 text-white py-3 rounded-2xl font-semibold hover:shadow-lg transition-all duration-300 hover:scale-105"
-                >
-                  New Chat
-                </button>
-                <button
-                  onClick={() => setMoodCheckError('')}
-                  className="w-full mt-3 bg-gray-100 text-indigo-600 py-3 rounded-2xl font-semibold hover:bg-gray-200 active:scale-95 transition-all duration-300"
-                >
-                  Close
-                </button>
-              </div>
+        {/* Scrollable container for entire sidebar content */}
+        <div className="flex-1 overflow-y-auto pr-2">
+          {/* Desktop Header - Enhanced */}
+          <div className="hidden lg:flex items-center space-x-3 mb-10">
+            <div className="bg-white/20 p-3 rounded-2xl">
+              <Heart className="w-7 h-7 text-white" fill="currentColor" />
             </div>
-          )}
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight">{isGuest ? 'Calmi (Guest)' : 'Calmi'}</h1>
+              <p className="text-white/80 text-sm font-medium">Your Wellness Companion</p>
+            </div>
+          </div>
 
-          <button
-            onClick={getMotivationalTip}
-            className="w-full bg-white/25 backdrop-blur-lg text-white py-3 sm:py-4 rounded-2xl font-semibold hover:bg-white/40 active:scale-95 transition-all duration-300 flex items-center justify-center space-x-2 shadow-lg hover:scale-105 text-sm sm:text-base ring-1 ring-white/30"
-          >
-            <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
-            <span className="truncate">Daily Inspiration {inspirationClicks < 5 ? `(${5 - inspirationClicks})` : '(Max)'}</span>
-          </button>
+          {/* Navigation area */}
+          <nav className="space-y-3 mb-10">
+            <button
+              onClick={() => {
+                setActiveFeature('chat');
+                setIsMobileSidebarOpen(false);
+              }}
+              className={`group w-full flex items-center space-x-3 p-3.5 rounded-xl text-left transition-all duration-200 ${
+                activeFeature === 'chat' 
+                  ? 'bg-white/25 shadow-sm' 
+                  : 'text-white hover:bg-white/10'
+              }`}
+            >
+              <Bot className="w-5 h-5 flex-shrink-0" />
+              <span className="font-medium group-hover:translate-x-0.5 transition-transform">AI Chat</span>
+            </button>
 
-          <button
-            onClick={() => {
-              setShowMoodCheckin(true);
-              setIsMobileSidebarOpen(false);
-            }}
-            className="w-full border-2 border-white/60 text-white py-3 sm:py-4 rounded-2xl font-semibold hover:bg-white/15 active:scale-95 transition-all duration-300 flex items-center justify-center space-x-2 hover:scale-105 text-sm sm:text-base ring-1 ring-white/30"
-            disabled={!canCheckInMood}
-            style={!canCheckInMood ? { opacity: 0.6, cursor: 'not-allowed' } : {}}
-          >
-            <Wind className="w-4 h-4 sm:w-5 sm:h-5" />
-            <span>Quick Check-in</span>
-          </button>
+            <button
+              onClick={() => {
+                setActiveFeature('mood');
+                setIsMobileSidebarOpen(false);
+              }}
+              className={`group w-full flex items-center space-x-3 p-3.5 rounded-xl text-left transition-all duration-200 ${
+                activeFeature === 'mood' 
+                  ? 'bg-white/25 shadow-sm' 
+                  : 'text-white hover:bg-white/10'
+              }`}
+            >
+              <Smile className="w-5 h-5 flex-shrink-0" />
+              <span className="font-medium group-hover:translate-x-0.5 transition-transform">Mood Check-in</span>
+            </button>
 
-          <button
-            onClick={() => {
-              localStorage.removeItem('calmi_token');
-              localStorage.removeItem('calmi_user');
-              localStorage.removeItem('calmi_guest');
-              localStorage.removeItem('calmi_session');
-              localStorage.removeItem('calmi_messages');
-              
-              setIsAuthenticated(false);
-              setIsGuest(false);
-              setUserName("");
-              setMessages([]);
-              setLoginFromHistory(false);
-              setIsMobileSidebarOpen(false);
-              
-              setTimeout(() => {
-                setShowLoginPage(false);
-                setShowRegisterPage(false);
-              }, 500);
-            }}
-            className="w-full mt-4 bg-white/15 text-white py-3 rounded-2xl font-semibold hover:bg-white/30 active:scale-95 transition-all duration-300 ring-1 ring-white/30"
-          >
-            {isGuest ? 'Exit Guest Mode' : 'Logout'}
-          </button>
+            <button
+              onClick={() => {
+                setActiveFeature('history');
+                setIsMobileSidebarOpen(false);
+              }}
+              className={`group w-full flex items-center space-x-3 p-3.5 rounded-xl text-left transition-all duration-200 ${
+                activeFeature === 'history' 
+                  ? 'bg-white/25 shadow-sm' 
+                  : 'text-white hover:bg-white/10'
+              }`}
+            >
+              <HistoryIcon className="w-5 h-5 flex-shrink-0" />
+              <span className="font-medium group-hover:translate-x-0.5 transition-transform">History</span>
+            </button>
+          </nav>
+
+          {/* Buttons section */}
+          <div className="space-y-2.5 pb-6">
+            <button
+              onClick={startNewChat}
+              className="w-full bg-gradient-to-r from-indigo-400 to-purple-500 text-white py-2.5 rounded-xl font-medium hover:shadow-md active:scale-[0.98] transition-all duration-200"
+            >
+              New Chat
+            </button>
+
+            <button
+              onClick={getMotivationalTip}
+              className="w-full bg-white/15 text-white py-2.5 rounded-xl font-medium hover:bg-white/20 active:scale-[0.98] transition-all duration-200 flex items-center justify-center space-x-2 text-sm"
+            >
+              <Sparkles className="w-4 h-4" />
+              <span>Daily Inspiration {inspirationClicks < 5 ? `(${5 - inspirationClicks})` : '(Max)'}</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setShowMoodCheckin(true);
+                setIsMobileSidebarOpen(false);
+              }}
+              className="w-full border border-white/30 text-white py-2.5 rounded-xl font-medium hover:bg-white/10 active:scale-[0.98] transition-all duration-200 flex items-center justify-center space-x-2 text-sm"
+            >
+              <Wind className="w-4 h-4" />
+              <span>Quick Check-in</span>
+            </button>
+
+            <button
+              onClick={() => {
+                localStorage.removeItem('calmi_token');
+                localStorage.removeItem('calmi_user');
+                localStorage.removeItem('calmi_guest');
+                localStorage.removeItem('calmi_session');
+                localStorage.removeItem('calmi_messages');
+                
+                setIsAuthenticated(false);
+                setIsGuest(false);
+                setUserName("");
+                setMessages([]);
+                setLoginFromHistory(false);
+                setIsMobileSidebarOpen(false);
+                
+                setTimeout(() => {
+                  setShowLoginPage(false);
+                  setShowRegisterPage(false);
+                }, 500);
+              }}
+              className="w-full bg-white/10 text-white py-2.5 rounded-xl font-medium hover:bg-white/15 active:scale-[0.98] transition-all duration-200"
+            >
+              {isGuest ? 'Exit Guest Mode' : 'Logout'}
+            </button>
+          </div>
         </div>
+
+        {/* Mood check error modal - separate overlay */}
+        {moodCheckError && (
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+            <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl border border-gray-100 animate-scale-in text-center">
+              <h3 className="text-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-4">
+                {moodCheckError}
+              </h3>
+              <button
+                onClick={startNewChat}
+                className="w-full bg-gradient-to-r from-indigo-500 to-purple-500 text-white py-2.5 rounded-xl font-medium hover:shadow-md transition-all duration-200"
+              >
+                New Chat
+              </button>
+              <button
+                onClick={() => setMoodCheckError('')}
+                className="w-full mt-2.5 bg-gray-100 text-indigo-600 py-2.5 rounded-xl font-medium hover:bg-gray-200 active:scale-[0.98] transition-all duration-200"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/*Mobile Sidebar Overlay*/}
@@ -741,6 +757,8 @@ const getMoodSentiment = (mood: string): 'positive' | 'neutral' | 'negative' => 
             showMoodCheckin={showMoodCheckin}
             setShowMoodCheckin={setShowMoodCheckin}
             renderOnlyModal={false}
+            selectedEmotions={selectedEmotions}
+            setSelectedEmotions={setSelectedEmotions}
           />
         )}
 
@@ -785,6 +803,8 @@ const getMoodSentiment = (mood: string): 'positive' | 'neutral' | 'negative' => 
         showMoodCheckin={showMoodCheckin}
         setShowMoodCheckin={setShowMoodCheckin}
         renderOnlyModal={true}
+        selectedEmotions={selectedEmotions}
+        setSelectedEmotions={setSelectedEmotions}
       />
     )}
 

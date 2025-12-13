@@ -104,7 +104,7 @@ class MoodEntry(db.Model):
     mood = db.Column(db.String(50), nullable=False)
     intensity = db.Column(db.Integer, nullable=False)
     note = db.Column(db.Text, nullable=True)
-    emotions = db.Column(db.String(500), nullable=True)
+    emotions = db.Column(db.String(500), nullable=True) 
     tags = db.Column(db.String(500), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
     

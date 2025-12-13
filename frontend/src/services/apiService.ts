@@ -27,7 +27,7 @@ export interface UnifiedSession {
   started_at: string;
   message_count: number;
   mood_entry_count: number;
-  mood_entry: {
+  mood_entries: {
     id: number;
     mood: string;
     intensity: number;
@@ -36,7 +36,7 @@ export interface UnifiedSession {
     tags: string[];
     created_at: string;
     session_id_string?: string;
-  } | null;
+  }[];
   last_message_preview: string;
 }
 
@@ -234,41 +234,131 @@ export const getMoodHistory = async (sessionId: string) => {
   }
 };
 
+// frontend/src/services/apiService.ts
+
+// Remove the complex update logic - just create new entries
 export const submitMoodCheckIn = async (
   sessionId: string,
+  mood: string, // This can now be comma-separated string
+  intensity: number,
+  note?: string,
+  emotions?: string[], // Keep emotions array for proper storage
+  tags?: string[]
+): Promise<{ message: string; mood_entry: any }> => {
+  const token = localStorage.getItem('calmi_token');
+  
+  const payload: any = {
+    session_id: sessionId,
+    mood: mood, // Send as comma-separated string
+    intensity: intensity
+  };
+  
+  if (note && note.trim()) {
+    payload.note = note.trim();
+  }
+  
+  // Store emotions as array
+  if (emotions && emotions.length > 0) {
+    payload.emotions = emotions;
+  }
+  
+  if (tags && tags.length > 0) {
+    payload.tags = tags;
+  }
+  
+  console.log('📤 Creating new mood check-in:', payload);
+  
+  const response = await fetch(`${API_BASE_URL}/api/mood/check-in`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    console.error('❌ Mood check-in failed:', errorData);
+    throw new Error(errorData.error || 'Failed to submit mood check-in');
+  }
+
+  const data = await response.json();
+  console.log('✅ Mood check-in successful:', data);
+  return data;
+};
+
+// Optional: Keep update function if you want to allow editing specific entries
+export const updateMoodCheckIn = async (
+  entryId: number,
   mood: string,
   intensity: number,
-  note: string = '',
-  emotions: string[] = [],
-  tags: string[] = []
-) => {
+  note?: string,
+  emotions?: string[],
+  tags?: string[]
+): Promise<{ message: string; mood_entry: any }> => {
+  const token = localStorage.getItem('calmi_token');
+  if (!token) {
+    throw new Error('Authentication required to update mood entries');
+  }
+  
+  const payload: any = {
+    mood: mood,
+    intensity: intensity
+  };
+  
+  if (note !== undefined) {
+    payload.note = note.trim();
+  }
+  
+  if (emotions !== undefined) {
+    payload.emotions = emotions;
+  }
+  
+  if (tags !== undefined) {
+    payload.tags = tags;
+  }
+  
+  console.log('📝 Updating mood entry:', entryId);
+  
+  const response = await fetch(`${API_BASE_URL}/api/mood/entry/${entryId}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    console.error('❌ Mood update failed:', errorData);
+    throw new Error(errorData.error || 'Failed to update mood check-in');
+  }
+
+  const data = await response.json();
+  console.log('✅ Mood update successful:', data);
+  return data;
+};
+
+// Function to get ALL mood entries for a session (not just the latest)
+export const getSessionMoodEntries = async (sessionId: string): Promise<any> => {
   try {
-    console.log('📝 Submitting mood check-in:', { sessionId, mood, intensity, note });
+    console.log('🔍 Fetching all mood entries for session:', sessionId);
     
-    const response = await fetch(`${API_BASE_URL}/api/mood/check-in`, {
-      method: 'POST',
+    const response = await fetch(`${API_BASE_URL}/api/mood/session/${sessionId}/entries`, {
+      method: 'GET',
       headers: getHeaders(true),
-      body: JSON.stringify({
-        session_id: sessionId,
-        mood,
-        intensity,
-        note,
-        emotions,
-        tags
-      }),
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error('Mood check-in error:', errorData);
-      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      throw new Error(`Failed to fetch session mood entries: ${response.status}`);
     }
 
     const data = await response.json();
-    console.log('✅ Mood check-in saved:', data);
     return data;
   } catch (error) {
-    console.error('❌ Error submitting mood check-in:', error);
+    console.error('Error fetching session mood entries:', error);
     throw error;
   }
 };
