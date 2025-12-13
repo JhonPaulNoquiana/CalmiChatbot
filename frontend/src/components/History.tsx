@@ -53,6 +53,30 @@
     const [activeView, setActiveView] = useState<'sessions' | 'analytics'>('sessions');
     const [loadingMoodEntries, setLoadingMoodEntries] = useState<Record<number, boolean>>({});
 
+    useEffect(() => {
+      if (activeView === 'analytics') {
+        loadAllMoodEntries();
+      }
+    }, [activeView]);
+
+    // Add this function to load mood entries for all sessions
+    const loadAllMoodEntries = async () => {
+      // Only load for sessions that have mood entries but haven't been loaded
+      const sessionsToLoad = sessions.filter(
+        session => session.mood_entry_count > 0 && 
+        (!session.mood_entries || session.mood_entries.length === 0)
+      );
+      
+      if (sessionsToLoad.length === 0) return;
+      
+      console.log('📊 Loading mood entries for analytics...');
+      
+      // Load mood entries for each session
+      for (const session of sessionsToLoad) {
+        await loadSessionMoodEntries(session.id, session.session_id);
+      }
+    };
+
     // Load unified sessions for authenticated users
     useEffect(() => {
       if (isAuthenticated && !isGuest) {
