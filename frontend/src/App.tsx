@@ -208,15 +208,24 @@ const moodOptions = [
   };
 
   const submitMoodCheckIn = async (): Promise<void> => {
-    if (!currentMood) return;
+    if (selectedEmotions.length === 0) {
+      setMoodCheckError('Please select at least one mood');
+      return;
+    }
 
     try {
+      // For multiple moods, we'll send them as an emotions array
+      // The backend will handle creating a summary for the mood field
+      const combinedMood = selectedEmotions.length <= 3 
+        ? selectedEmotions.join(', ')
+        : `${selectedEmotions[0]}, ${selectedEmotions[1]}, +${selectedEmotions.length - 2}`;
+      
       const response = await apiSubmitMoodCheckIn(
         sessionId,
-        currentMood,
+        combinedMood, // Use the summary for mood field
         moodIntensity,
         moodNote,
-        selectedEmotions
+        selectedEmotions // Pass as emotions array for proper storage
       );
 
       console.log('✅ Mood check-in saved:', response);
@@ -224,7 +233,7 @@ const moodOptions = [
       // Create local mood entry for immediate UI update
       const moodEntry: MoodEntry = {
         id: response.mood_entry.id,
-        mood: currentMood,
+        mood: response.mood_entry.mood, // Use the mood from response
         intensity: moodIntensity,
         timestamp: new Date().toLocaleString([], { 
           month: 'short', 
@@ -234,21 +243,30 @@ const moodOptions = [
         }),
         note: moodNote,
         sessionId,
-        emotions: selectedEmotions,
+        emotions: selectedEmotions, // Store the full array
       };
 
       // Always add to mood history (multiple entries allowed)
       setMoodHistory((prev) => [moodEntry, ...prev]);
 
       // Send confirmation bot message
+      let moodDescription = '';
+      if (selectedEmotions.length === 1) {
+        moodDescription = selectedEmotions[0];
+      } else if (selectedEmotions.length <= 3) {
+        moodDescription = selectedEmotions.join(', ');
+      } else {
+        moodDescription = `${selectedEmotions.length} different moods`;
+      }
+      
       const botMessage: Message = {
         id: Date.now() + 1,
-        text: `Thank you for checking in! I've recorded that you're feeling ${currentMood}. ${
-          selectedEmotions.length > 0 ? `I notice you're also feeling ${selectedEmotions.join(', ')}. ` : ''
+        text: `Thank you for checking in! I've recorded that you're feeling ${moodDescription}. ${
+          moodNote ? `Thanks for sharing your note. ` : ''
         }Remember, it's okay to feel this way. I'm here whenever you need support. 💙`,
         sender: 'bot',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        sentiment: getMoodSentiment(currentMood),
+        sentiment: getCombinedMoodSentiment(selectedEmotions),
         sessionId,
       };
 
@@ -256,7 +274,7 @@ const moodOptions = [
       
       // Reset form
       setShowMoodCheckin(false);
-      setCurrentMood('');
+      setCurrentMood(''); 
       setMoodNote('');
       setMoodIntensity(5);
       setSelectedEmotions([]);
@@ -265,11 +283,37 @@ const moodOptions = [
       
     } catch (error: any) {
       console.error('Failed to save mood check-in:', error);
-      
-      // Show error to user
       setMoodCheckError(error.message || 'Failed to save mood check-in. Please try again.');
       setShowMoodCheckin(false);
     }
+  };
+
+  // Add helper function for combined mood sentiment
+  const getCombinedMoodSentiment = (moods: string[]): 'positive' | 'neutral' | 'negative' => {
+    if (moods.length === 0) return 'neutral';
+    
+    // Count positive, negative, neutral moods
+    let positiveCount = 0;
+    let negativeCount = 0;
+    let neutralCount = 0;
+    
+    moods.forEach(mood => {
+      switch (mood) {
+        case 'happy': positiveCount++; break;
+        case 'sad': 
+        case 'anxious':
+        case 'lonely':
+        case 'stressed': 
+        case 'tired': 
+        case 'angry': negativeCount++; break;
+        case 'neutral': neutralCount++; break;
+        default: neutralCount++;
+      }
+    });
+    
+    if (positiveCount > negativeCount && positiveCount > neutralCount) return 'positive';
+    if (negativeCount > positiveCount && negativeCount > neutralCount) return 'negative';
+    return 'neutral';
   };
 
   const startNewChat = () => {
@@ -374,20 +418,6 @@ const moodOptions = [
     const option = moodOptions.find((m) => m.value === mood);
     return option?.emoji || '😐';
   };
-
-const getMoodSentiment = (mood: string): 'positive' | 'neutral' | 'negative' => {
-  switch (mood) {
-    case 'happy': return 'positive';
-    case 'sad': 
-    case 'anxious':
-    case 'lonely':
-    case 'stressed': 
-        case 'tired': 
-    case 'angry': return 'negative';
-    case 'neutral': return 'neutral';
-    default: return 'neutral';
-  }
-};
 
   const detectUserSentiment = (message: string): 'positive' | 'neutral' | 'negative' => {
     const lowerMessage = message.toLowerCase();

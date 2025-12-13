@@ -16,19 +16,52 @@ def create_mood_entry():
         data = request.get_json()
         
         # Validation
-        if not data or not data.get('session_id') or not data.get('mood') or 'intensity' not in data:
-            return {'error': 'Session ID, mood, and intensity are required'}, 400
+        if not data or not data.get('session_id') or 'intensity' not in data:
+            return {'error': 'Session ID and intensity are required'}, 400
+        
+        # Check if we have either mood or emotions
+        if not data.get('mood') and not data.get('emotions'):
+            return {'error': 'Either mood or emotions are required'}, 400
         
         session_id = data['session_id']
-        mood = data['mood']
         intensity = data['intensity']
         note = data.get('note', '')
-        emotions = ','.join(data.get('emotions', [])) if isinstance(data.get('emotions'), list) else data.get('emotions', '')
+        
+        # Handle mood and emotions
+        mood_value = ''
+        emotions_value = ''
+        
+        # Get emotions from either emotions array or mood string
+        if data.get('emotions') and isinstance(data['emotions'], list):
+            emotions = data['emotions']
+            # Store emotions as comma-separated string
+            emotions_value = ','.join(emotions)
+            # For mood field, store first 3 emotions or a summary
+            if len(emotions) == 1:
+                mood_value = emotions[0]
+            elif len(emotions) <= 3:
+                mood_value = ','.join(emotions)
+            else:
+                mood_value = f"{emotions[0]},{emotions[1]},+{len(emotions)-2}"
+        elif data.get('mood'):
+            # Legacy support for single mood string
+            mood_value = data['mood']
+            emotions_value = data['mood']  # Store as emotions too for consistency
+        
         tags = ','.join(data.get('tags', [])) if isinstance(data.get('tags'), list) else data.get('tags', '')
         
-        # Validate mood
-        if mood not in MoodEntry.VALID_MOODS:
-            return {'error': f'Invalid mood. Must be one of: {", ".join(MoodEntry.VALID_MOODS)}'}, 400
+        # Validate mood (if provided)
+        if mood_value and ',' in mood_value:
+            # Split and validate each mood
+            moods = [m.strip() for m in mood_value.split(',') if m.strip()]
+            for m in moods:
+                # Skip validation for "+X" summary entries
+                if not m.startswith('+') and m not in MoodEntry.VALID_MOODS:
+                    return {'error': f'Invalid mood "{m}". Must be one of: {", ".join(MoodEntry.VALID_MOODS)}'}, 400
+        elif mood_value and not mood_value.startswith('+'):
+            # Single mood validation
+            if mood_value not in MoodEntry.VALID_MOODS:
+                return {'error': f'Invalid mood. Must be one of: {", ".join(MoodEntry.VALID_MOODS)}'}, 400
         
         # Validate intensity
         if not isinstance(intensity, int) or intensity < 1 or intensity > 10:
@@ -45,19 +78,14 @@ def create_mood_entry():
             db.session.add(chat_session)
             db.session.commit()
         
-        # REMOVED: Duplicate check - now allowing multiple mood entries per session
-        # existing_entry = MoodEntry.query.filter_by(session_id=chat_session.id).first()
-        # if existing_entry:
-        #     return {'error': 'One mood check-in per chat session only. Use PUT /mood/entry/<id> to update.', 'existing_entry_id': existing_entry.id}, 400
-        
         # Create mood entry
         mood_entry = MoodEntry(
             session_id=chat_session.id,
             user_id=request.user_id,
-            mood=mood,
+            mood=mood_value[:255],  # Truncate to 255 characters to avoid database errors
             intensity=intensity,
             note=note,
-            emotions=emotions,
+            emotions=emotions_value[:500],  # Truncate emotions field too
             tags=tags
         )
         db.session.add(mood_entry)

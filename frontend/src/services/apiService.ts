@@ -239,17 +239,17 @@ export const getMoodHistory = async (sessionId: string) => {
 // Remove the complex update logic - just create new entries
 export const submitMoodCheckIn = async (
   sessionId: string,
-  mood: string,
+  mood: string, // This can now be comma-separated string
   intensity: number,
   note?: string,
-  emotions?: string[],
+  emotions?: string[], // Keep emotions array for proper storage
   tags?: string[]
 ): Promise<{ message: string; mood_entry: any }> => {
   const token = localStorage.getItem('calmi_token');
   
   const payload: any = {
     session_id: sessionId,
-    mood: mood,
+    mood: mood, // Send as comma-separated string
     intensity: intensity
   };
   
@@ -257,6 +257,7 @@ export const submitMoodCheckIn = async (
     payload.note = note.trim();
   }
   
+  // Store emotions as array
   if (emotions && emotions.length > 0) {
     payload.emotions = emotions;
   }
@@ -265,7 +266,7 @@ export const submitMoodCheckIn = async (
     payload.tags = tags;
   }
   
-  console.log('📤 Creating new mood check-in for session:', sessionId);
+  console.log('📤 Creating new mood check-in:', payload);
   
   const response = await fetch(`${API_BASE_URL}/api/mood/check-in`, {
     method: 'POST',
