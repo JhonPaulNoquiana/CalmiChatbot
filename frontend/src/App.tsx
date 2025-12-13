@@ -46,10 +46,12 @@ function App() {
   const [selectedRecord] = useState<MoodEntry | null>(null);
   const [showRecordDetail, setShowRecordDetail] = useState<boolean>(false);
   const [moodCheckError, setMoodCheckError] = useState<string>('');
+  const [selectedEmotions, setSelectedEmotions] = useState<string[]>([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const canCheckInMood = !moodHistory.some((entry) => entry.sessionId === sessionId);
+  // REMOVED: canCheckInMood check - users can always check in their mood
+  // const canCheckInMood = !moodHistory.some((entry) => entry.sessionId === sessionId);
 
   useEffect(() => {
     if (isGuest) {
@@ -108,6 +110,9 @@ const moodOptions = [
           }),
           note: entry.note || '',
           sessionId: entry.session_id_string || String(entry.session_id),
+          emotions: entry.emotions ? (typeof entry.emotions === 'string' ? 
+                   entry.emotions.split(',').filter((e: string) => e.trim()) : 
+                   entry.emotions) : [],
         }));
         
         setMoodHistory(formattedHistory);
@@ -169,13 +174,12 @@ const moodOptions = [
       
       const botMessage: Message = {
         id: Date.now() + 1,
-        text: response.message || 'I understand. Tell me more about how you\'re feeling.',
+        text: response.message || "I hear you. Thank you for sharing that with me.",
         sender: 'bot',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         sentiment: response.sentiment || 'neutral',
         sessionId,
       };
-      
       setMessages((prev) => [...prev, botMessage]);
     } catch (error) {
       console.error('API call failed, using fallback response. Error:', error);
@@ -206,22 +210,16 @@ const moodOptions = [
   const submitMoodCheckIn = async (): Promise<void> => {
     if (!currentMood) return;
 
-    // Check if already checked in for this session (local check)
-    if (moodHistory.some((entry) => entry.sessionId === sessionId)) {
-      setMoodCheckError('One Mood Check In per chat');
-      setShowMoodCheckin(false);
-      return;
-    }
-
     try {
       const response = await apiSubmitMoodCheckIn(
         sessionId,
         currentMood,
         moodIntensity,
-        moodNote
+        moodNote,
+        selectedEmotions
       );
 
-      console.log('✅ Mood check-in saved to database:', response);
+      console.log('✅ Mood check-in saved:', response);
 
       // Create local mood entry for immediate UI update
       const moodEntry: MoodEntry = {
@@ -235,15 +233,19 @@ const moodOptions = [
           minute: '2-digit' 
         }),
         note: moodNote,
-        sessionId, // Use the current session string ID
+        sessionId,
+        emotions: selectedEmotions,
       };
 
+      // Always add to mood history (multiple entries allowed)
       setMoodHistory((prev) => [moodEntry, ...prev]);
 
       // Send confirmation bot message
       const botMessage: Message = {
         id: Date.now() + 1,
-        text: `Thank you for checking in! I've recorded that you're feeling ${currentMood}. Remember, it's okay to feel this way. I'm here whenever you need support. 💙`,
+        text: `Thank you for checking in! I've recorded that you're feeling ${currentMood}. ${
+          selectedEmotions.length > 0 ? `I notice you're also feeling ${selectedEmotions.join(', ')}. ` : ''
+        }Remember, it's okay to feel this way. I'm here whenever you need support. 💙`,
         sender: 'bot',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         sentiment: getMoodSentiment(currentMood),
@@ -257,6 +259,7 @@ const moodOptions = [
       setCurrentMood('');
       setMoodNote('');
       setMoodIntensity(5);
+      setSelectedEmotions([]);
       setActiveFeature('chat');
       setIsMobileSidebarOpen(false);
       
@@ -267,7 +270,7 @@ const moodOptions = [
       setMoodCheckError(error.message || 'Failed to save mood check-in. Please try again.');
       setShowMoodCheckin(false);
     }
-};
+  };
 
   const startNewChat = () => {
     const newSessionId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -276,6 +279,7 @@ const moodOptions = [
     setCurrentMood('');
     setMoodNote('');
     setMoodIntensity(5);
+    setSelectedEmotions([]);
     setShowMoodCheckin(false);
     setMoodCheckError('');
     setInspirationClicks(0);
@@ -671,8 +675,8 @@ const getMoodSentiment = (mood: string): 'positive' | 'neutral' | 'negative' => 
               setIsMobileSidebarOpen(false);
             }}
             className="w-full border-2 border-white/60 text-white py-3 sm:py-4 rounded-2xl font-semibold hover:bg-white/15 active:scale-95 transition-all duration-300 flex items-center justify-center space-x-2 hover:scale-105 text-sm sm:text-base ring-1 ring-white/30"
-            disabled={!canCheckInMood}
-            style={!canCheckInMood ? { opacity: 0.6, cursor: 'not-allowed' } : {}}
+            // REMOVED: disabled={!canCheckInMood}
+            // style={!canCheckInMood ? { opacity: 0.6, cursor: 'not-allowed' } : {}}
           >
             <Wind className="w-4 h-4 sm:w-5 sm:h-5" />
             <span>Quick Check-in</span>
@@ -740,6 +744,8 @@ const getMoodSentiment = (mood: string): 'positive' | 'neutral' | 'negative' => 
             showMoodCheckin={showMoodCheckin}
             setShowMoodCheckin={setShowMoodCheckin}
             renderOnlyModal={false}
+            selectedEmotions={selectedEmotions}
+            setSelectedEmotions={setSelectedEmotions}
           />
         )}
 
@@ -784,6 +790,8 @@ const getMoodSentiment = (mood: string): 'positive' | 'neutral' | 'negative' => 
         showMoodCheckin={showMoodCheckin}
         setShowMoodCheckin={setShowMoodCheckin}
         renderOnlyModal={true}
+        selectedEmotions={selectedEmotions}
+        setSelectedEmotions={setSelectedEmotions}
       />
     )}
 

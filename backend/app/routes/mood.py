@@ -23,8 +23,8 @@ def create_mood_entry():
         mood = data['mood']
         intensity = data['intensity']
         note = data.get('note', '')
-        emotions = ','.join(data.get('emotions', []))
-        tags = ','.join(data.get('tags', []))
+        emotions = ','.join(data.get('emotions', [])) if isinstance(data.get('emotions'), list) else data.get('emotions', '')
+        tags = ','.join(data.get('tags', [])) if isinstance(data.get('tags'), list) else data.get('tags', '')
         
         # Validate mood
         if mood not in MoodEntry.VALID_MOODS:
@@ -45,10 +45,10 @@ def create_mood_entry():
             db.session.add(chat_session)
             db.session.commit()
         
-        # Check if mood entry already exists for this session
-        existing_entry = MoodEntry.query.filter_by(session_id=chat_session.id).first()
-        if existing_entry:
-            return {'error': 'One mood check-in per chat session only'}, 400
+        # REMOVED: Duplicate check - now allowing multiple mood entries per session
+        # existing_entry = MoodEntry.query.filter_by(session_id=chat_session.id).first()
+        # if existing_entry:
+        #     return {'error': 'One mood check-in per chat session only. Use PUT /mood/entry/<id> to update.', 'existing_entry_id': existing_entry.id}, 400
         
         # Create mood entry
         mood_entry = MoodEntry(
@@ -76,39 +76,87 @@ def create_mood_entry():
         print(f"Error creating mood entry: {e}")
         return {'error': 'Failed to create mood entry', 'details': str(e)}, 500
 
-def get_user_mood_history():
-    """Get all mood entries for the authenticated user"""
+
+@mood_bp.route('/entry/<int:entry_id>', methods=['PUT'])
+@optional_token_required
+def update_mood_entry(entry_id):
+    """Update an existing mood entry"""
     try:
-        limit = int(request.args.get('limit', 100))
-        offset = int(request.args.get('offset', 0))
+        data = request.get_json()
         
-        # Get all mood entries for this user, ordered by most recent
-        mood_entries = MoodEntry.query.filter_by(
-            user_id=request.user_id
-        ).order_by(MoodEntry.created_at.desc()).offset(offset).limit(limit).all()
+        # Find the mood entry
+        mood_entry = MoodEntry.query.get(entry_id)
         
-        total = MoodEntry.query.filter_by(user_id=request.user_id).count()
+        if not mood_entry:
+            return {'error': 'Mood entry not found'}, 404
         
-        # Convert to dict and add session_id string for frontend
-        mood_data = []
-        for entry in mood_entries:
-            entry_dict = entry.to_dict()
-            # Get the session_id string from the ChatSession
-            session = ChatSession.query.get(entry.session_id)
-            if session:
-                entry_dict['session_id_string'] = session.session_id
-            mood_data.append(entry_dict)
+        # Validate ownership if user is authenticated
+        if request.user_id and mood_entry.user_id != request.user_id:
+            return {'error': 'Unauthorized to update this mood entry'}, 403
+        
+        # Update fields if provided
+        if 'mood' in data:
+            if data['mood'] not in MoodEntry.VALID_MOODS:
+                return {'error': f'Invalid mood. Must be one of: {", ".join(MoodEntry.VALID_MOODS)}'}, 400
+            mood_entry.mood = data['mood']
+        
+        if 'intensity' in data:
+            if not isinstance(data['intensity'], int) or data['intensity'] < 1 or data['intensity'] > 10:
+                return {'error': 'Intensity must be between 1 and 10'}, 400
+            mood_entry.intensity = data['intensity']
+        
+        if 'note' in data:
+            mood_entry.note = data['note']
+        
+        if 'emotions' in data:
+            mood_entry.emotions = ','.join(data['emotions']) if isinstance(data['emotions'], list) else data['emotions']
+        
+        if 'tags' in data:
+            mood_entry.tags = ','.join(data['tags']) if isinstance(data['tags'], list) else data['tags']
+        
+        db.session.commit()
         
         return {
-            'mood_history': mood_data,
-            'total': total,
-            'count': len(mood_entries)
+            'message': 'Mood entry updated successfully',
+            'mood_entry': mood_entry.to_dict()
         }, 200
     
     except Exception as e:
-        print(f"Error fetching user mood history: {e}")
-        return {'error': 'Failed to fetch mood history', 'details': str(e)}, 500
+        db.session.rollback()
+        print(f"Error updating mood entry: {e}")
+        return {'error': 'Failed to update mood entry', 'details': str(e)}, 500
+
+
+@mood_bp.route('/session/<session_id>/entry', methods=['GET'])
+@optional_token_required
+def get_session_mood_entry(session_id):
+    """Get mood entry for a specific session"""
+    try:
+        # Get the chat session
+        chat_session = ChatSession.query.filter_by(session_id=session_id).first()
         
+        if not chat_session:
+            return {'mood_entry': None}, 200
+        
+        # Get the mood entry for this session
+        mood_entry = MoodEntry.query.filter_by(session_id=chat_session.id).first()
+        
+        if not mood_entry:
+            return {'mood_entry': None}, 200
+        
+        entry_dict = mood_entry.to_dict()
+        # Add session_id string for frontend
+        entry_dict['session_id_string'] = chat_session.session_id
+        
+        return {
+            'mood_entry': entry_dict
+        }, 200
+    
+    except Exception as e:
+        print(f"Error fetching session mood entry: {e}")
+        return {'error': 'Failed to fetch mood entry', 'details': str(e)}, 500
+
+
 @mood_bp.route('/user/history', methods=['GET'])
 @token_required
 def get_user_mood_history():
@@ -143,6 +191,7 @@ def get_user_mood_history():
     except Exception as e:
         print(f"Error fetching user mood history: {e}")
         return {'error': 'Failed to fetch mood history', 'details': str(e)}, 500
+
 
 @mood_bp.route('/history/<int:session_id>', methods=['GET'])
 def get_mood_history(session_id):
@@ -267,6 +316,11 @@ def delete_mood_entry(entry_id):
         if not mood_entry:
             return {'error': 'Mood entry not found'}, 404
         
+        # Get the session to update mood_entry_count
+        chat_session = ChatSession.query.get(mood_entry.session_id)
+        if chat_session and chat_session.mood_entry_count > 0:
+            chat_session.mood_entry_count -= 1
+        
         db.session.delete(mood_entry)
         db.session.commit()
         
@@ -276,3 +330,35 @@ def delete_mood_entry(entry_id):
         db.session.rollback()
         print(f"Error deleting mood entry: {e}")
         return {'error': 'Failed to delete mood entry', 'details': str(e)}, 500
+    
+@mood_bp.route('/session/<session_id>/entries', methods=['GET'])
+@optional_token_required
+def get_session_mood_entries(session_id):
+    """Get ALL mood entries for a specific session"""
+    try:
+        # Get the chat session
+        chat_session = ChatSession.query.filter_by(session_id=session_id).first()
+        
+        if not chat_session:
+            return {'mood_entries': [], 'count': 0}, 200
+        
+        # Get ALL mood entries for this session, ordered by most recent
+        mood_entries = MoodEntry.query.filter_by(
+            session_id=chat_session.id
+        ).order_by(MoodEntry.created_at.desc()).all()
+        
+        # Convert to dict with session_id_string
+        mood_data = []
+        for entry in mood_entries:
+            entry_dict = entry.to_dict()
+            entry_dict['session_id_string'] = chat_session.session_id
+            mood_data.append(entry_dict)
+        
+        return {
+            'mood_entries': mood_data,
+            'count': len(mood_entries)
+        }, 200
+    
+    except Exception as e:
+        print(f"Error fetching session mood entries: {e}")
+        return {'error': 'Failed to fetch mood entries', 'details': str(e)}, 500    
