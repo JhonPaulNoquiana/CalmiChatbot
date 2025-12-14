@@ -1,6 +1,10 @@
 // frontend/src/services/apiService.ts
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_BASE_URL = import.meta.env.VITE_API_URL;
+
+if (!API_BASE_URL) {
+  throw new Error('VITE_API_URL is missing in production');
+}
 
 interface ChatResponse {
   message: string;
@@ -45,7 +49,20 @@ export interface UnifiedSessionsResponse {
   count: number;
 }
 
-// Legacy interfaces (for backward compatibility)
+export interface MoodStatistics {
+  total_check_ins: number;
+  mood_distribution: Record<string, number>;
+  average_intensity: number;
+  common_emotions?: string[];
+  emotion_distribution?: Record<string, number>;
+  time_period?: string;
+}
+
+export interface AnalyticsRecommendation {
+  recommendation: string;
+  generated_at: string;
+}
+
 interface SessionData {
   id: number;
   session_id: string;
@@ -146,7 +163,7 @@ export const getChatHistory = async (sessionId: number): Promise<any> => {
   }
 };
 
-// UNIFIED SESSIONS FUNCTION (NEW)
+// UNIFIED SESSIONS FUNCTION
 export const getUnifiedSessions = async (): Promise<UnifiedSessionsResponse> => {
   try {
     console.log('Fetching unified sessions');
@@ -168,7 +185,7 @@ export const getUnifiedSessions = async (): Promise<UnifiedSessionsResponse> => 
   }
 };
 
-// SESSION STATISTICS (NEW)
+// SESSION STATISTICS 
 export const getSessionStatistics = async (): Promise<any> => {
   try {
     console.log('📊 Fetching session statistics');
@@ -185,7 +202,7 @@ export const getSessionStatistics = async (): Promise<any> => {
     const data = await response.json();
     return data;
   } catch (error) {
-    console.error('❌ Error fetching session statistics:', error);
+    console.error('Error fetching session statistics:', error);
     throw error;
   }
 };
@@ -207,7 +224,7 @@ export const getUserSessions = async (): Promise<SessionsResponse> => {
     const data: SessionsResponse = await response.json();
     return data;
   } catch (error) {
-    console.error('❌ Error fetching sessions:', error);
+    console.error(' Error fetching sessions:', error);
     throw error;
   }
 };
@@ -234,9 +251,6 @@ export const getMoodHistory = async (sessionId: string) => {
   }
 };
 
-// frontend/src/services/apiService.ts
-
-// Remove the complex update logic - just create new entries
 export const submitMoodCheckIn = async (
   sessionId: string,
   mood: string,
@@ -278,36 +292,20 @@ export const submitMoodCheckIn = async (
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    console.error('❌ Mood check-in failed:', errorData);
+    console.error(' Mood check-in failed:', errorData);
     throw new Error(errorData.error || 'Failed to submit mood check-in');
   }
 
   const data = await response.json();
-  console.log('✅ Mood check-in successful with recommendation:', data);
+  console.log(' Mood check-in successful with recommendation:', data);
   return data;
 };
-
-// Add these new interfaces and functions at the end of apiService.ts
-
-export interface MoodStatistics {
-  total_check_ins: number;
-  mood_distribution: Record<string, number>;
-  average_intensity: number;
-  common_emotions?: string[];
-  emotion_distribution?: Record<string, number>;
-  time_period?: string;
-}
-
-export interface AnalyticsRecommendation {
-  recommendation: string;
-  generated_at: string;
-}
 
 export const getAnalyticsRecommendation = async (
   moodStatistics: MoodStatistics
 ): Promise<AnalyticsRecommendation> => {
   try {
-    console.log('🤖 Requesting analytics recommendation');
+    console.log(' Requesting analytics recommendation');
     
     const response = await fetch(`${API_BASE_URL}/api/mood/analytics/recommendation`, {
       method: 'POST',
@@ -323,17 +321,17 @@ export const getAnalyticsRecommendation = async (
     }
 
     const data = await response.json();
-    console.log('✅ Analytics recommendation received');
+    console.log('Analytics recommendation received');
     return data;
   } catch (error) {
-    console.error('❌ Error fetching analytics recommendation:', error);
+    console.error('Error fetching analytics recommendation:', error);
     throw error;
   }
 };
 
 export const getMoodStatistics = async (days: number = 30): Promise<{ statistics: MoodStatistics }> => {
   try {
-    console.log('📊 Fetching mood statistics for', days, 'days');
+    console.log('Fetching mood statistics for', days, 'days');
     
     const response = await fetch(`${API_BASE_URL}/api/mood/statistics?days=${days}`, {
       method: 'GET',
@@ -396,40 +394,56 @@ export const updateMoodCheckIn = async (
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    console.error('❌ Mood update failed:', errorData);
+    console.error('Mood update failed:', errorData);
     throw new Error(errorData.error || 'Failed to update mood check-in');
   }
 
   const data = await response.json();
-  console.log('✅ Mood update successful:', data);
+  console.log('Mood update successful:', data);
   return data;
 };
 
 // Function to get ALL mood entries for a session (not just the latest)
-export const getSessionMoodEntries = async (sessionId: string): Promise<any> => {
-  try {
-    console.log('🔍 Fetching all mood entries for session:', sessionId);
-    
-    const response = await fetch(`${API_BASE_URL}/api/mood/session/${sessionId}/entries`, {
+export const getSessionMoodEntries = async (sessionUUID: string): Promise<any> => {
+  const response = await fetch(
+    `${API_BASE_URL}/api/mood/session/${sessionUUID}/entries`,
+    {
       method: 'GET',
       headers: getHeaders(true),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch session mood entries: ${response.status}`);
+      credentials: 'include',
     }
+  );
 
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error fetching session mood entries:', error);
-    throw error;
+  if (!response.ok) {
+    throw new Error(`Failed to fetch session mood entries: ${response.status}`);
   }
+
+  return response.json();
 };
+
+export const getSessionMoodEntriesById = async (
+  sessionId: number
+): Promise<any> => {
+  const response = await fetch(
+    `${API_BASE_URL}/api/mood/session/numeric/${sessionId}/entries`,
+    {
+      method: 'GET',
+      headers: getHeaders(true),
+      credentials: 'include',
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch session mood entries: ${response.status}`);
+  }
+
+  return response.json();
+};
+
 
 export const getUserMoodHistory = async (): Promise<any> => {
   try {
-    console.log('📊 Fetching user mood history');
+    console.log('Fetching user mood history');
     
     const response = await fetch(`${API_BASE_URL}/api/mood/user/history`, {
       method: 'GET',
@@ -444,7 +458,7 @@ export const getUserMoodHistory = async (): Promise<any> => {
     console.log('Mood history fetched:', data);
     return data;
   } catch (error) {
-    console.error('❌ Error fetching mood history:', error);
+    console.error('Error fetching mood history:', error);
     throw error;
   }
 };
@@ -477,14 +491,14 @@ export const registerUser = async (email: string, password: string, fullName: st
     
     return data;
   } catch (error) {
-    console.error('❌ Registration error:', error);
+    console.error('Registration error:', error);
     throw error;
   }
 };
 
 export const loginUser = async (email: string, password: string): Promise<AuthResponse> => {
   try {
-    console.log('🔐 Logging in user:', email);
+    console.log('Logging in user:', email);
     
     const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
       method: 'POST',
@@ -508,7 +522,7 @@ export const loginUser = async (email: string, password: string): Promise<AuthRe
     
     return data;
   } catch (error) {
-    console.error('❌ Login error:', error);
+    console.error('Login error:', error);
     throw error;
   }
 };
@@ -539,7 +553,7 @@ export const logoutUser = (): void => {
 export const deleteSession = async (sessionId: number): Promise<{ success: boolean; message: string; session_id?: number }> => {
   try {
     const token = getAuthToken();
-    console.log('🗑️ Deleting session:', sessionId, 'with token:', token ? 'Present' : 'Missing');
+    console.log('Deleting session:', sessionId, 'with token:', token ? 'Present' : 'Missing');
     
     const response = await fetch(`${API_BASE_URL}/api/chat/session/${sessionId}`, {
       method: 'DELETE',
@@ -561,7 +575,7 @@ export const deleteSession = async (sessionId: number): Promise<{ success: boole
     }
 
     const data = await response.json();
-    console.log('✅ Delete successful:', data);
+    console.log('Delete successful:', data);
     
     if (!data.success) {
       throw new Error(data.error || 'Delete failed');
@@ -569,7 +583,7 @@ export const deleteSession = async (sessionId: number): Promise<{ success: boole
     
     return data;
   } catch (error) {
-    console.error('❌ Error in deleteSession:', error);
+    console.error('Error in deleteSession:', error);
     throw error;
   }
 };
@@ -577,7 +591,7 @@ export const deleteSession = async (sessionId: number): Promise<{ success: boole
 // Optional: Add a create session function if needed
 export const createSession = async (sessionId: string): Promise<any> => {
   try {
-    console.log('➕ Creating new session:', sessionId);
+    console.log('Creating new session:', sessionId);
     
     const response = await fetch(`${API_BASE_URL}/api/chat/session`, {
       method: 'POST',
@@ -592,10 +606,10 @@ export const createSession = async (sessionId: string): Promise<any> => {
     }
 
     const data = await response.json();
-    console.log('✅ Session created:', data);
+    console.log('Session created:', data);
     return data;
   } catch (error) {
-    console.error('❌ Error creating session:', error);
+    console.error('Error creating session:', error);
     throw error;
   }
 };
